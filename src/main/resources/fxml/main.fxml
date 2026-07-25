@@ -11,6 +11,16 @@
         <ToolBar>
             <Button text="Apri immagine" onAction="#handleOpenImage"/>
             <Button fx:id="saveButton" text="Salva immagine" layoutX="10" layoutY="10" />
+
+            <HBox spacing="10" alignment="TOP_CENTER" style="-fx-background-color: #D0D0D0;" prefWidth="600" prefHeight="50">
+                <padding>
+                    <Insets top="10" right="10" bottom="10" left="10"/>
+                </padding>
+                <Label text="Bordo bianco/nero"/>
+                <Slider fx:id="borderSlider" min="0" max="20" value="0" majorTickUnit="5" minorTickCount="1" showTickLabels="true" showTickMarks="true"/>
+                <Label text="Bordo nero"/>
+                <Slider fx:id="blackBorderSlider" min="0" max="10" value="0" majorTickUnit="2" minorTickCount="1" showTickLabels="true" showTickMarks="true"/>
+            </HBox>
         </ToolBar>
     </top>
 
@@ -21,16 +31,4 @@
         </StackPane>
     </center>
 
-    <!-- Pannello destro: Slider -->
-    <right>
-        <VBox spacing="10" alignment="TOP_CENTER" style="-fx-background-color: #D0D0D0;" prefWidth="200">
-            <padding>
-                <Insets top="10" right="10" bottom="10" left="10"/>
-            </padding>
-            <Label text="Bordo bianco/nero"/>
-            <Slider fx:id="borderSlider" min="0" max="20" value="0" majorTickUnit="5" minorTickCount="4" showTickLabels="true" showTickMarks="true"/>
-            <Label text="Bordo nero"/>
-            <Slider fx:id="blackBorderSlider" min="0" max="10" value="0" majorTickUnit="2" minorTickCount="1" showTickLabels="true" showTickMarks="true"/>
-        </VBox>
-    </right>
 </BorderPane>
