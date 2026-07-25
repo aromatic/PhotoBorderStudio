@@ -10,6 +10,7 @@
     <top>
         <ToolBar>
             <Button text="Apri immagine" onAction="#handleOpenImage"/>
+            <Button fx:id="saveButton" text="Salva immagine" layoutX="10" layoutY="10" />
         </ToolBar>
     </top>
 
