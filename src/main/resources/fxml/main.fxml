@@ -12,14 +12,36 @@
             <Button text="Apri immagine" onAction="#handleOpenImage"/>
             <Button fx:id="saveButton" text="Salva immagine" layoutX="10" layoutY="10" />
 
-            <HBox spacing="10" alignment="TOP_CENTER" style="-fx-background-color: #D0D0D0;" prefWidth="600" prefHeight="50">
+            <HBox spacing="15" alignment="CENTER_LEFT" style="-fx-background-color: #D0D0D0;" prefWidth="1200" prefHeight="50">
                 <padding>
                     <Insets top="10" right="10" bottom="10" left="10"/>
                 </padding>
+                <!-- Bordo bianco -->
                 <Label text="Bordo bianco/nero"/>
-                <Slider fx:id="borderSlider" min="0" max="20" value="0" majorTickUnit="5" minorTickCount="1" showTickLabels="true" showTickMarks="true"/>
+                <HBox spacing="5" alignment="CENTER">
+                    <Button fx:id="borderMinusBtn" text="◀" style="-fx-font-size: 10; -fx-padding: 5;" prefWidth="30" prefHeight="30"/>
+                    <TextField fx:id="borderTextField" style="-fx-alignment: center;" prefWidth="50" prefHeight="30"/>
+                    <Button fx:id="borderPlusBtn" text="▶" style="-fx-font-size: 10; -fx-padding: 5;" prefWidth="30" prefHeight="30"/>
+                </HBox>
+
+                <!-- Bordo nero -->
                 <Label text="Bordo nero"/>
-                <Slider fx:id="blackBorderSlider" min="0" max="10" value="0" majorTickUnit="2" minorTickCount="1" showTickLabels="true" showTickMarks="true"/>
+                <HBox spacing="5" alignment="CENTER">
+                    <Button fx:id="blackBorderMinusBtn" text="◀" style="-fx-font-size: 10; -fx-padding: 5;" prefWidth="30" prefHeight="30"/>
+                    <TextField fx:id="blackBorderTextField" style="-fx-alignment: center;" prefWidth="50" prefHeight="30"/>
+                    <Button fx:id="blackBorderPlusBtn" text="▶" style="-fx-font-size: 10; -fx-padding: 5;" prefWidth="30" prefHeight="30"/>
+                </HBox>
+
+                <!-- Separatore -->
+                <Separator orientation="VERTICAL"/>
+
+                <!-- Copyright -->
+                <Label text="Copyright"/>
+                <TextField fx:id="copyrightTextField" style="-fx-alignment: center;" prefWidth="200" promptText="Inserisci testo copyright"/>
+                
+                <!-- Font -->
+                <Label text="Font"/>
+                <ComboBox fx:id="fontComboBox" prefWidth="120"/>
             </HBox>
         </ToolBar>
     </top>
