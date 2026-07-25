@@ -1,0 +1,16 @@
+.root {
+
+    -fx-background-color: #202020;
+
+}
+
+
+.title {
+
+    -fx-text-fill: white;
+
+    -fx-font-size: 32px;
+
+    -fx-font-weight: bold;
+
+}
