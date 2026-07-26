@@ -42,6 +42,17 @@
                 <!-- Font -->
                 <Label text="Font"/>
                 <ComboBox fx:id="fontComboBox" prefWidth="120"/>
+                
+                <!-- Separatore -->
+                <Separator orientation="VERTICAL"/>
+                
+                <!-- Scala Font -->
+                <Label text="Scala Font (1-10)"/>
+                <HBox spacing="5" alignment="CENTER">
+                    <Button fx:id="fontScaleMinusBtn" text="◀" style="-fx-font-size: 10; -fx-padding: 5;" prefWidth="30" prefHeight="30"/>
+                    <TextField fx:id="fontScaleTextField" style="-fx-alignment: center;" prefWidth="50" prefHeight="30"/>
+                    <Button fx:id="fontScalePlusBtn" text="▶" style="-fx-font-size: 10; -fx-padding: 5;" prefWidth="30" prefHeight="30"/>
+                </HBox>
             </HBox>
         </ToolBar>
     </top>
