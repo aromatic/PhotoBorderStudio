@@ -34,7 +34,7 @@
 
                 <!-- Separatore -->
                 <Separator orientation="VERTICAL"/>
-
+                
                 <!-- Copyright -->
                 <Label text="Copyright"/>
                 <TextField fx:id="copyrightTextField" style="-fx-alignment: center;" prefWidth="200" promptText="Inserisci testo copyright"/>
@@ -52,5 +52,6 @@
             <ImageView fx:id="imageView" preserveRatio="true" fitWidth="Infinity" fitHeight="Infinity"/>
         </StackPane>
     </center>
+
 
 </BorderPane>

@@ -55,18 +55,26 @@ public class AppController {
 
     @FXML
     private void initialize() {
-        // Imposta i valori iniziali
-        borderTextField.setText("8");
-        blackBorderTextField.setText("1");
-
         // Configura TextField per accettare solo interi
         configureIntegerTextField(borderTextField);
         configureIntegerTextField(blackBorderTextField);
+
+        // Imposta i valori iniziali DOPO la configurazione del TextFormatter
+        borderTextField.setText("400");
+        blackBorderTextField.setText("30");
 
         // Inizializza il ComboBox con i font disponibili
         fontComboBox.setItems(FXCollections.observableArrayList(
             javafx.scene.text.Font.getFamilies()
         ));
+
+        // Listener per il cambio del font (aggiunto PRIMA di impostare il valore iniziale)
+        fontComboBox.valueProperty().addListener((observable, oldValue, newValue) -> {
+            if (originalImage != null) {
+                updateBorders();
+            }
+        });
+
         fontComboBox.setValue("Arial");
 
         // Listener per i pulsanti del bordo bianco
@@ -90,17 +98,12 @@ public class AppController {
             }
         });
 
-        // Listener per il copyright
-        copyrightTextField.textProperty().addListener((observable, oldValue, newValue) -> {
-            if (originalImage != null) {
-                updateBorders();
-            }
-        });
-
-        // Listener per il cambio del font
-        fontComboBox.valueProperty().addListener((observable, oldValue, newValue) -> {
-            if (originalImage != null) {
-                updateBorders();
+        // Listener per il copyright: disegna solo quando premi Enter
+        copyrightTextField.setOnKeyPressed(event -> {
+            if (event.getCode() == javafx.scene.input.KeyCode.ENTER) {
+                if (originalImage != null) {
+                    updateBorders();
+                }
             }
         });
 
@@ -108,7 +111,7 @@ public class AppController {
         imageView.sceneProperty().addListener((observable, oldScene, newScene) -> {
             if (newScene != null) {
                 imageView.fitWidthProperty().bind(newScene.widthProperty());
-                imageView.fitHeightProperty().bind(newScene.heightProperty().subtract(50));
+                imageView.fitHeightProperty().bind(newScene.heightProperty().subtract(70));
             }
         });
 
@@ -231,12 +234,26 @@ public class AppController {
                 gc.setFill(Color.BLACK);
                 String selectedFont = fontComboBox.getValue() != null ? fontComboBox.getValue() : "Arial";
                 
-                // Calcola la dimensione del font proporzionata al bordo bianco (metà dell'altezza del bordo)
-                int fontSize = Math.max((int)(whiteBorderSize * 0.5), 8);
-                gc.setFont(new javafx.scene.text.Font(selectedFont, fontSize));
+                // Calcola la dimensione del font proporzionata al bordo bianco
+                int fontSize = Math.max((int)(whiteBorderSize * 0.4), 12);
+                javafx.scene.text.Font font = new javafx.scene.text.Font(selectedFont, fontSize);
+                gc.setFont(font);
                 
-                // Posiziona il copyright al centro del bordo bianco inferiore
-                gc.fillText(copyrightText, whiteBorderSize + 10, totalHeight - whiteBorderSize / 2);
+                // Aggiungi il carattere del copyright al testo
+                String fullCopyrightText = "© " + copyrightText;
+                
+                // Misura la larghezza del testo usando Text node per calcolo preciso
+                javafx.scene.text.Text textNode = new javafx.scene.text.Text(fullCopyrightText);
+                textNode.setFont(font);
+                javafx.geometry.Bounds textBounds = textNode.getLayoutBounds();
+                double textWidth = textBounds.getWidth();
+                
+                // Posiziona il copyright in basso a destra nel bordo bianco con margine
+                double marginRight = 15;
+                double marginBottom = whiteBorderSize / 2;
+                double x = totalWidth - whiteBorderSize - textWidth - marginRight;
+                double y = totalHeight - marginBottom;
+                gc.fillText(fullCopyrightText, x, y);
             }
 
             // Snapshot alle dimensioni REALI del canvas (non dello schermo)
