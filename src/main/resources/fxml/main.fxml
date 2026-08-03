@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.scene.control.*?>
+<?import javafx.scene.canvas.Canvas?>
 <?import javafx.scene.image.ImageView?>
 <?import javafx.scene.layout.*?>
 
@@ -18,6 +19,7 @@
                 <MenuItem text="Bordo" onAction="#handleShowBorderDialog"/>
                 <MenuItem text="Copyright" onAction="#handleShowCopyrightDialog"/>
                 <MenuItem text="Istogramma" onAction="#handleShowHistogramDialog"/>
+                <MenuItem text="Analizza colori" onAction="#handleShowColorAnalysisDialog"/>
             </Menu>
         </MenuBar>
     </top>
@@ -26,6 +28,7 @@
     <center>
         <StackPane>
             <ImageView fx:id="imageView" preserveRatio="true" fitWidth="Infinity" fitHeight="Infinity"/>
+            <Canvas fx:id="markerCanvas" mouseTransparent="true"/>
         </StackPane>
     </center>
 

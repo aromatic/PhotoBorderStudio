@@ -1,15 +1,20 @@
 package it.romagnoli.photoborder;
 
 import it.romagnoli.photoborder.dialog.BorderDialog;
+import it.romagnoli.photoborder.dialog.ColorAnalysisDialog;
 import it.romagnoli.photoborder.dialog.CopyrightDialog;
 import it.romagnoli.photoborder.dialog.HistogramDialog;
 
 import javafx.embed.swing.SwingFXUtils;
 import javafx.fxml.FXML;
+import javafx.geometry.Point2D;
 import javafx.scene.control.MenuItem;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.image.PixelReader;
 import javafx.scene.image.WritableImage;
+import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.paint.Color;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
@@ -18,6 +23,8 @@ import javafx.stage.FileChooser;
 import javax.imageio.ImageIO;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class AppController {
 
@@ -25,14 +32,20 @@ public class AppController {
     private ImageView imageView;
 
     @FXML
+    private Canvas markerCanvas;
+
+    @FXML
     private MenuItem saveMenuItem;
 
     private final BorderDialog borderDialog = new BorderDialog();
     private final CopyrightDialog copyrightDialog = new CopyrightDialog();
     private final HistogramDialog histogramDialog = new HistogramDialog();
+    private final ColorAnalysisDialog colorAnalysisDialog = new ColorAnalysisDialog();
 
     private Image originalImage;
     private WritableImage borderedImage; // immagine con i bordi, usata anche per il salvataggio
+    private List<Point2D> colorSamplePoints = List.of(); // punti (coord. immagine originale) marcati sulla preview
+    private int currentBorderOffset = 0; // whiteBorderSize + blackBorderSize applicati all'ultima renderizzazione
 
     @FXML
     private void initialize() {
@@ -57,6 +70,25 @@ public class AppController {
             }
         });
 
+        // Il canvas dei marker segue sempre le dimensioni dell'area immagine
+        markerCanvas.widthProperty().bind(imageView.fitWidthProperty());
+        markerCanvas.heightProperty().bind(imageView.fitHeightProperty());
+        markerCanvas.widthProperty().addListener((obs, oldVal, newVal) -> drawColorMarkers());
+        markerCanvas.heightProperty().addListener((obs, oldVal, newVal) -> drawColorMarkers());
+
+        // Rimuove i marker quando il dialog colori viene chiuso
+        colorAnalysisDialog.setOnClose(this::drawColorMarkers);
+
+        // Quando si seleziona/deseleziona una cella colorata, mostra solo il marker corrispondente
+        colorAnalysisDialog.selectedIndexProperty().addListener((obs, oldVal, newVal) -> drawColorMarkers());
+
+        // Click sull'immagine: se una cella è selezionata, ricampiona colore e punto in quella posizione
+        imageView.setOnMouseClicked(this::handleImageClicked);
+
+        // Muovendo il mouse sull'immagine, evidenzia nel dialog la cella corrispondente al marker sotto il cursore
+        imageView.setOnMouseMoved(this::handleImageMouseMoved);
+        imageView.setOnMouseExited(event -> colorAnalysisDialog.setHoveredIndex(-1));
+
         // Listener per il salvataggio immagine
         saveMenuItem.setOnAction(event -> saveImageWithBorders());
     }
@@ -80,6 +112,10 @@ public class AppController {
             // Applica i bordi iniziali
             updateBorders();
             histogramDialog.updateImage(originalImage);
+
+            if (colorAnalysisDialog.isShowing()) {
+                refreshColorAnalysis();
+            }
         }
     }
 
@@ -104,6 +140,218 @@ public class AppController {
         histogramDialog.updateImage(originalImage);
     }
 
+    @FXML
+    private void handleShowColorAnalysisDialog() {
+        colorAnalysisDialog.show();
+        refreshColorAnalysis();
+    }
+
+    /** Ricalcola i colori campionati dall'immagine e ridisegna i marker in overlay. */
+    private void refreshColorAnalysis() {
+        colorSamplePoints = colorAnalysisDialog.updateColors(originalImage);
+        drawColorMarkers();
+    }
+
+    /**
+     * Disegna dei cerchietti rossi sull'overlay in corrispondenza dei punti della
+     * regola dei terzi, senza alterare in alcun modo l'immagine sottostante.
+     */
+    private void drawColorMarkers() {
+        GraphicsContext gc = markerCanvas.getGraphicsContext2D();
+        gc.clearRect(0, 0, markerCanvas.getWidth(), markerCanvas.getHeight());
+
+        Image displayedImage = imageView.getImage();
+        if (!colorAnalysisDialog.isShowing() || displayedImage == null || colorSamplePoints.isEmpty()) {
+            return;
+        }
+
+        double imgWidth = displayedImage.getWidth();
+        double imgHeight = displayedImage.getHeight();
+        double canvasWidth = markerCanvas.getWidth();
+        double canvasHeight = markerCanvas.getHeight();
+        if (imgWidth <= 0 || imgHeight <= 0 || canvasWidth <= 0 || canvasHeight <= 0) {
+            return;
+        }
+
+        double scale = Math.min(canvasWidth / imgWidth, canvasHeight / imgHeight);
+        double displayedWidth = imgWidth * scale;
+        double displayedHeight = imgHeight * scale;
+        double offsetX = (canvasWidth - displayedWidth) / 2;
+        double offsetY = (canvasHeight - displayedHeight) / 2;
+
+        double radius = 6;
+        gc.setStroke(Color.RED);
+        gc.setLineWidth(2);
+
+        int selectedIndex = colorAnalysisDialog.getSelectedIndex();
+        if (selectedIndex >= 0 && selectedIndex < colorSamplePoints.size()) {
+            // Una cella è selezionata: mostra solo il marker di riferimento di quel colore
+            drawSingleMarker(gc, colorSamplePoints.get(selectedIndex), scale, offsetX, offsetY, radius);
+        } else {
+            for (Point2D point : colorSamplePoints) {
+                drawSingleMarker(gc, point, scale, offsetX, offsetY, radius);
+            }
+        }
+    }
+
+    /** Disegna un singolo cerchietto rosso (in coordinate immagine originale) sull'overlay. */
+    private void drawSingleMarker(GraphicsContext gc, Point2D point, double scale,
+                                   double offsetX, double offsetY, double radius) {
+        // Sposta il punto (in coordinate immagine originale) nelle coordinate
+        // dell'immagine effettivamente mostrata, tenendo conto dei bordi aggiunti.
+        double cx = offsetX + (point.getX() + currentBorderOffset) * scale;
+        double cy = offsetY + (point.getY() + currentBorderOffset) * scale;
+        gc.strokeOval(cx - radius, cy - radius, radius * 2, radius * 2);
+    }
+
+    /**
+     * Calcola il fattore di scala tra l'immagine effettivamente mostrata e l'area disponibile,
+     * oppure -1 se non calcolabile (nessuna immagine o area non ancora dimensionata).
+     */
+    private double computeDisplayScale() {
+        Image displayedImage = imageView.getImage();
+        if (displayedImage == null) {
+            return -1;
+        }
+        double imgWidth = displayedImage.getWidth();
+        double imgHeight = displayedImage.getHeight();
+        double canvasWidth = markerCanvas.getWidth();
+        double canvasHeight = markerCanvas.getHeight();
+        if (imgWidth <= 0 || imgHeight <= 0 || canvasWidth <= 0 || canvasHeight <= 0) {
+            return -1;
+        }
+        return Math.min(canvasWidth / imgWidth, canvasHeight / imgHeight);
+    }
+
+    /**
+     * Converte un punto in coordinate immagine originale nelle coordinate locali dell'ImageView
+     * (stesso sistema di riferimento degli eventi mouse su imageView, senza offset di centratura).
+     */
+    private Point2D toImageViewLocalCoordinates(Point2D originalPoint, double scale) {
+        return new Point2D(
+            (originalPoint.getX() + currentBorderOffset) * scale,
+            (originalPoint.getY() + currentBorderOffset) * scale
+        );
+    }
+
+    /**
+     * Gestisce il movimento del mouse sull'immagine: se il cursore si trova sopra uno dei
+     * cerchietti attualmente visibili, evidenzia (hover) la cella corrispondente nel dialog.
+     */
+    private void handleImageMouseMoved(MouseEvent event) {
+        if (!colorAnalysisDialog.isShowing() || colorSamplePoints.isEmpty()) {
+            colorAnalysisDialog.setHoveredIndex(-1);
+            return;
+        }
+
+        double scale = computeDisplayScale();
+        if (scale <= 0) {
+            colorAnalysisDialog.setHoveredIndex(-1);
+            return;
+        }
+
+        double hitRadius = 10;
+        int hovered = -1;
+        int selectedIndex = colorAnalysisDialog.getSelectedIndex();
+
+        if (selectedIndex >= 0 && selectedIndex < colorSamplePoints.size()) {
+            // Solo il marker selezionato è visibile: considera solo quello per l'hover
+            Point2D local = toImageViewLocalCoordinates(colorSamplePoints.get(selectedIndex), scale);
+            if (Math.hypot(local.getX() - event.getX(), local.getY() - event.getY()) <= hitRadius) {
+                hovered = selectedIndex;
+            }
+        } else {
+            for (int i = 0; i < colorSamplePoints.size(); i++) {
+                Point2D local = toImageViewLocalCoordinates(colorSamplePoints.get(i), scale);
+                if (Math.hypot(local.getX() - event.getX(), local.getY() - event.getY()) <= hitRadius) {
+                    hovered = i;
+                    break;
+                }
+            }
+        }
+
+        colorAnalysisDialog.setHoveredIndex(hovered);
+    }
+
+    /**
+     * Gestisce il click sull'immagine.
+     * <ul>
+     *   <li>Tasto destro: deseleziona la cella corrente e ridisegna tutti i marker.</li>
+     *   <li>Tasto sinistro sopra un marker (hover): seleziona quella cella, come se si fosse
+     *       cliccato direttamente sul riquadro nel dialog (nasconde gli altri marker, senza spostarlo).</li>
+     *   <li>Tasto sinistro altrove, con una cella già selezionata: ricampiona il colore
+     *       dell'immagine originale nel punto cliccato e sposta il marker in quella posizione.</li>
+     * </ul>
+     */
+    private void handleImageClicked(MouseEvent event) {
+        if (originalImage == null || !colorAnalysisDialog.isShowing()) {
+            return;
+        }
+
+        if (event.getButton() == MouseButton.SECONDARY) {
+            colorAnalysisDialog.clearSelection();
+            return;
+        }
+
+        if (event.getButton() != MouseButton.PRIMARY) {
+            return;
+        }
+
+        int hoveredIndex = colorAnalysisDialog.getHoveredIndex();
+        if (hoveredIndex >= 0) {
+            // Click direttamente su un marker: si comporta come il click sul riquadro nel dialog
+            colorAnalysisDialog.selectIndex(hoveredIndex);
+            return;
+        }
+
+        int selectedIndex = colorAnalysisDialog.getSelectedIndex();
+        if (selectedIndex < 0 || selectedIndex >= colorSamplePoints.size()) {
+            return;
+        }
+
+        Image displayedImage = imageView.getImage();
+        if (displayedImage == null) {
+            return;
+        }
+
+        double scale = computeDisplayScale();
+        if (scale <= 0) {
+            return;
+        }
+
+        // Nota: a differenza del canvas (che occupa sempre l'intera area fitW x fitH),
+        // i bounds locali di una ImageView con preserveRatio corrispondono già alle
+        // dimensioni effettive dell'immagine renderizzata (senza letterbox), quindi
+        // event.getX()/getY() sono già relativi all'angolo in alto a sinistra
+        // dell'immagine visibile: non va sottratto alcun offset di centratura.
+        double origX = event.getX() / scale - currentBorderOffset;
+        double origY = event.getY() / scale - currentBorderOffset;
+
+        int originalWidth = (int) originalImage.getWidth();
+        int originalHeight = (int) originalImage.getHeight();
+        int px = clamp((int) Math.round(origX), 0, originalWidth - 1);
+        int py = clamp((int) Math.round(origY), 0, originalHeight - 1);
+
+        // Se il click cade fuori dall'area dell'immagine originale (sul bordo), ignora
+        if (origX < 0 || origY < 0 || origX >= originalWidth || origY >= originalHeight) {
+            return;
+        }
+
+        PixelReader reader = originalImage.getPixelReader();
+        Color newColor = reader.getColor(px, py);
+
+        List<Point2D> updatedPoints = new ArrayList<>(colorSamplePoints);
+        updatedPoints.set(selectedIndex, new Point2D(px, py));
+        colorSamplePoints = updatedPoints;
+
+        colorAnalysisDialog.updateColorAt(selectedIndex, newColor);
+        drawColorMarkers();
+    }
+
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
     private void applyBorders(double whiteBorderPixels, double blackBorderPixels) {
         try {
             if (originalImage == null) {
@@ -123,6 +371,8 @@ public class AppController {
 
             int totalWidth = width + (whiteBorderSize + blackBorderSize) * 2;
             int totalHeight = height + (whiteBorderSize + blackBorderSize) * 2;
+
+            currentBorderOffset = whiteBorderSize + blackBorderSize;
 
             Canvas canvas = new Canvas(totalWidth, totalHeight);
             GraphicsContext gc = canvas.getGraphicsContext2D();
@@ -188,6 +438,9 @@ public class AppController {
             canvas.snapshot(null, borderedImage);
 
             imageView.setImage(borderedImage);
+
+            // Il bordo può essere cambiato: riallinea la posizione dei marker sull'overlay
+            drawColorMarkers();
         } catch (Exception e) {
             e.printStackTrace();
         }
