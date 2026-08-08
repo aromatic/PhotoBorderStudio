@@ -2,6 +2,7 @@ package it.romagnoli.photoborder.dialog;
 
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
@@ -14,6 +15,7 @@ import org.controlsfx.control.RangeSlider;
 /**
  * Dialog non modale per impostare i valori del bordo nero e del bordo bianco.
  * Espone un RangeSlider sincronizzato con due TextField editabili manualmente.
+ * I valori vengono applicati all'immagine solo quando si preme il pulsante "Applica".
  */
 public class BorderDialog {
 
@@ -73,7 +75,6 @@ public class BorderDialog {
                     // ignora
                 }
             }
-            onChange.run();
         });
 
         blackBorderTextField.textProperty().addListener((observable, oldValue, newValue) -> {
@@ -87,7 +88,6 @@ public class BorderDialog {
                     // ignora
                 }
             }
-            onChange.run();
         });
     }
 
@@ -111,7 +111,8 @@ public class BorderDialog {
     }
 
     /**
-     * Imposta il callback invocato ogni volta che il bordo nero o bianco cambia valore.
+     * Imposta il callback invocato quando l'utente preme il pulsante "Applica", per
+     * aggiornare l'immagine con i valori di bordo nero/bianco correnti.
      */
     public void setOnChange(Runnable onChange) {
         this.onChange = onChange != null ? onChange : () -> {};
@@ -132,7 +133,12 @@ public class BorderDialog {
             );
             sliderRow.setAlignment(Pos.CENTER);
 
-            VBox content = new VBox(15, new Label("Bordo nero / bordo bianco (px)"), sliderRow);
+            Button applyButton = new Button("Applica");
+            applyButton.setOnAction(event -> onChange.run());
+            HBox applyRow = new HBox(applyButton);
+            applyRow.setAlignment(Pos.CENTER);
+
+            VBox content = new VBox(15, new Label("Bordo nero / bordo bianco (px)"), sliderRow, applyRow);
             content.setPadding(new Insets(15));
             content.setAlignment(Pos.CENTER);
 

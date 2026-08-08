@@ -1,0 +1,499 @@
+package it.romagnoli.photoborder.dialog;
+
+import javafx.beans.property.SimpleIntegerProperty;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+import javafx.embed.swing.SwingFXUtils;
+import javafx.fxml.FXML;
+import javafx.geometry.Insets;
+import javafx.geometry.Point2D;
+import javafx.geometry.Pos;
+import javafx.scene.canvas.Canvas;
+import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.Dialog;
+import javafx.scene.control.Label;
+import javafx.scene.control.ToggleButton;
+import javafx.scene.control.ToggleGroup;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.image.PixelReader;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
+import javafx.stage.Window;
+import javafx.stage.FileChooser;
+
+import it.romagnoli.photoborder.raw.RawImageReader;
+
+import org.controlsfx.control.GridCell;
+import org.controlsfx.control.GridView;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+
+/**
+ * Dialog dedicato al confronto dei colori campionati (regola dei terzi, griglia 3x3) tra due
+ * immagini distinte. Richiede la lettura di entrambe le immagini all'apertura e mostra, per
+ * ciascun punto campionato, il colore rilevato su entrambe. Due icone/pulsanti a forma di
+ * miniatura permettono di scegliere quale delle due immagini visualizzare come anteprima
+ * principale nel dialog.
+ */
+public class ImageCompareDialog {
+
+    private static final int ROWS = 3;
+    private static final int COLS = 3;
+    private static final double SWATCH_SIZE = 60;
+    private static final double CELL_WIDTH = 480;
+    private static final double CELL_HEIGHT = 90;
+    private static final double THUMB_SIZE = 64;
+
+    private static final double[] FRACTIONS = { 1.0 / 6.0, 0.5, 5.0 / 6.0 };
+
+    private final GridView<CompareSample> gridView = new GridView<>();
+    private final ObservableList<CompareSample> samples = FXCollections.observableArrayList();
+
+    private final ImageView previewView = new ImageView();
+    private final Canvas markerCanvas = new Canvas();
+    private final ToggleButton image1Toggle = new ToggleButton();
+    private final ToggleButton image2Toggle = new ToggleButton();
+    /** Indica quale immagine è attualmente visualizzata in anteprima (1 o 2). */
+    private final SimpleIntegerProperty selectedImage = new SimpleIntegerProperty(1);
+
+    private Image image1;
+    private Image image2;
+    private String fileName1;
+    private String fileName2;
+    private List<Point2D> points1 = List.of();
+    private List<Point2D> points2 = List.of();
+
+    private Dialog<Void> dialog;
+
+    public ImageCompareDialog() {
+        gridView.setItems(samples);
+        gridView.setCellWidth(CELL_WIDTH);
+        gridView.setCellHeight(CELL_HEIGHT);
+        gridView.setHorizontalCellSpacing(6);
+        gridView.setVerticalCellSpacing(6);
+        gridView.setCellFactory(gv -> new CompareGridCell(selectedImage));
+        gridView.setPrefSize(COLS * (CELL_WIDTH + 6) + 10, ROWS * (CELL_HEIGHT + 6) + 10);
+        gridView.setMaxWidth(Double.MAX_VALUE);
+        gridView.setMaxHeight(Double.MAX_VALUE);
+
+        previewView.setPreserveRatio(true);
+
+        ToggleGroup toggleGroup = new ToggleGroup();
+        image1Toggle.setToggleGroup(toggleGroup);
+        image2Toggle.setToggleGroup(toggleGroup);
+        image1Toggle.setMinHeight(THUMB_SIZE);
+        image2Toggle.setMinHeight(THUMB_SIZE);
+        image1Toggle.setSelected(true);
+
+        image1Toggle.setOnAction(e -> {
+            if (image1Toggle.isSelected()) {
+                previewView.setImage(image1);
+                selectedImage.set(1);
+                drawMarkers();
+            }
+        });
+        image2Toggle.setOnAction(e -> {
+            if (image2Toggle.isSelected()) {
+                previewView.setImage(image2);
+                selectedImage.set(2);
+                drawMarkers();
+            }
+        });
+
+        markerCanvas.setMouseTransparent(true);
+        markerCanvas.widthProperty().addListener((obs, oldVal, newVal) -> drawMarkers());
+        markerCanvas.heightProperty().addListener((obs, oldVal, newVal) -> drawMarkers());
+    }
+
+    public boolean chooseImages() {
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Immagini",
+                "*.jpg", "*.jpeg", "*.gif", "*.tif", "*.tiff"));
+        File file = fileChooser.showOpenDialog(null);
+
+        if (file != null) {
+            Image img = loadImage(file);
+            if (img != null) {
+                image1 = img;
+                fileName1 = file.getName();
+                image1Toggle.setGraphic(new ImageView(img));
+                image1Toggle.setText(fileName1);
+                previewView.setImage(image1);
+                selectedImage.set(1);
+                updateSamples();
+            }
+        } else {
+            return false;
+        }
+        
+        fileChooser = new FileChooser();
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Immagini",
+                "*.jpg", "*.jpeg", "*.gif", "*.tif", "*.tiff"));
+        file = fileChooser.showOpenDialog(null);
+        if (file != null) {
+            Image img = loadImage(file);
+            if (img != null) {
+                image2 = img;
+                fileName2 = file.getName();
+                image2Toggle.setGraphic(new ImageView(img));
+                image2Toggle.setText(fileName2);
+                previewView.setImage(image2);
+                selectedImage.set(2);
+                updateSamples();
+            }
+        } else {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Mostra il dialog. Se non sono ancora state selezionate le due immagini da confrontare,
+     * chiede prima di aprirle tramite FileChooser; se l'utente annulla la selezione, il dialog
+     * non viene mostrato.
+     */
+    public void show() {
+        if (image1 == null || image2 == null) {
+            if (!chooseImages()) {
+                return;
+            }
+        }
+
+        if (dialog == null) {
+            dialog = new Dialog<>();
+            dialog.setTitle("Confronta immagini");
+            dialog.initModality(javafx.stage.Modality.NONE);
+            dialog.setResizable(true);
+            dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+
+            HBox thumbsBox = new HBox(8, image1Toggle, image2Toggle);
+            thumbsBox.setAlignment(Pos.CENTER_LEFT);
+
+            VBox leftBox = new VBox(10, thumbsBox, gridView);
+            leftBox.setAlignment(Pos.TOP_LEFT);
+            VBox.setVgrow(gridView, Priority.ALWAYS);
+            gridView.prefWidthProperty().bind(leftBox.widthProperty());
+
+            StackPane previewBox = new StackPane(previewView, markerCanvas);
+            previewBox.setAlignment(Pos.CENTER);
+            previewBox.setPadding(new Insets(0, 0, 0, 15));
+            previewBox.setPrefSize(800, 800);
+            previewBox.setMinSize(800, 800);
+            previewBox.setMaxSize(800, 800);
+            previewView.setFitWidth(800);
+            previewView.setFitHeight(800);
+            markerCanvas.setWidth(800);
+            markerCanvas.setHeight(800);
+
+            HBox topArea = new HBox(15, leftBox, previewBox);
+
+            // Il box dei colori occupa 1/3 della larghezza disponibile, l'anteprima
+            // dell'immagine ha dimensione fissa 800x800 ed è centrata nello spazio restante.
+            leftBox.prefWidthProperty().bind(topArea.widthProperty().multiply(1.0 / 3.0));
+            leftBox.setMinWidth(Region.USE_PREF_SIZE);
+            leftBox.setMaxWidth(Region.USE_PREF_SIZE);
+
+            HBox.setHgrow(previewBox, Priority.ALWAYS);
+
+            VBox content = new VBox(10, topArea);
+            content.setPadding(new Insets(15));
+            VBox.setVgrow(topArea, Priority.ALWAYS);
+
+            dialog.getDialogPane().setContent(content);
+            dialog.getDialogPane().setPrefSize(1150, 860);
+        }
+
+        updateSamples();
+        dialog.show();
+    }
+
+    public boolean isShowing() {
+        return dialog != null && dialog.isShowing();
+    }
+
+    /** Permette di forzare una nuova selezione delle due immagini al successivo show(). */
+    public void reset() {
+        image1 = null;
+        image2 = null;
+    }
+
+    private static final List<String> RAW_EXTENSIONS = List.of(
+            ".cr2", ".nef", ".arw", ".dng", ".raf", ".orf", ".rw2",
+            ".CR2", ".NEF", ".ARW", ".DNG", ".RAF", ".ORF", ".RW2");
+
+    private static final List<String> ACCEPTED_EXTENSIONS = List.of(
+            ".jpg", ".jpeg", ".gif", ".tif", ".tiff",
+            ".cr2", ".nef", ".arw", ".dng", ".raf", ".orf", ".rw2");
+
+    private static Image loadImage(File file) {
+        String name = file.getName().toLowerCase(Locale.ROOT);
+
+        if (RAW_EXTENSIONS.stream().anyMatch(name::endsWith)) {
+            try {
+                java.awt.image.BufferedImage bufferedImage = RawImageReader.read(file);
+                return SwingFXUtils.toFXImage(bufferedImage, null);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return null;
+        }
+
+        if (name.endsWith(".tif") || name.endsWith(".tiff")) {
+            try {
+                java.awt.image.BufferedImage bufferedImage = javax.imageio.ImageIO.read(file);
+                if (bufferedImage != null) {
+                    return SwingFXUtils.toFXImage(bufferedImage, null);
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return null;
+        }
+        return new Image(file.toURI().toString());
+    }
+
+    private static List<Point2D> computeSamplePoints(double width, double height) {
+        List<Point2D> points = new ArrayList<>(ROWS * COLS);
+        for (double fy : FRACTIONS) {
+            for (double fx : FRACTIONS) {
+                points.add(new Point2D(width * fx, height * fy));
+            }
+        }
+        return points;
+    }
+
+    private void updateSamples() {
+        if (image1 == null || image2 == null) {
+            return;
+        }
+
+        double w1 = image1.getWidth();
+        double h1 = image1.getHeight();
+        double w2 = image2.getWidth();
+        double h2 = image2.getHeight();
+
+        points1 = computeSamplePoints(w1, h1);
+        points2 = computeSamplePoints(w2, h2);
+        PixelReader reader1 = image1.getPixelReader();
+        PixelReader reader2 = image2.getPixelReader();
+
+        List<CompareSample> newSamples = new ArrayList<>(points1.size());
+        for (int i = 0; i < points1.size(); i++) {
+            Point2D p1 = points1.get(i);
+            Point2D p2 = points2.get(i);
+            int x1 = clamp((int) Math.round(p1.getX()), 0, (int) w1 - 1);
+            int y1 = clamp((int) Math.round(p1.getY()), 0, (int) h1 - 1);
+            int x2 = clamp((int) Math.round(p2.getX()), 0, (int) w2 - 1);
+            int y2 = clamp((int) Math.round(p2.getY()), 0, (int) h2 - 1);
+            newSamples.add(new CompareSample(reader1.getColor(x1, y1), reader2.getColor(x2, y2)));
+        }
+
+        samples.setAll(newSamples);
+        drawMarkers();
+    }
+
+    /**
+     * Disegna dei cerchietti rossi sull'overlay in corrispondenza dei punti della regola dei
+     * terzi dell'immagine attualmente visualizzata in anteprima, usando la stessa logica di
+     * scala/centratura impiegata da AppController per l'analisi colore, senza alterare in alcun
+     * modo l'immagine sottostante.
+     */
+    private void drawMarkers() {
+        GraphicsContext gc = markerCanvas.getGraphicsContext2D();
+        gc.clearRect(0, 0, markerCanvas.getWidth(), markerCanvas.getHeight());
+
+        Image displayedImage = previewView.getImage();
+        List<Point2D> points = selectedImage.get() == 1 ? points1 : points2;
+        if (displayedImage == null || points.isEmpty()) {
+            return;
+        }
+
+        double imgWidth = displayedImage.getWidth();
+        double imgHeight = displayedImage.getHeight();
+        double canvasWidth = markerCanvas.getWidth();
+        double canvasHeight = markerCanvas.getHeight();
+        if (imgWidth <= 0 || imgHeight <= 0 || canvasWidth <= 0 || canvasHeight <= 0) {
+            return;
+        }
+
+        double scale = Math.min(canvasWidth / imgWidth, canvasHeight / imgHeight);
+        double displayedWidth = imgWidth * scale;
+        double displayedHeight = imgHeight * scale;
+        double offsetX = (canvasWidth - displayedWidth) / 2;
+        double offsetY = (canvasHeight - displayedHeight) / 2;
+
+        double radius = 6;
+        gc.setStroke(Color.RED);
+        gc.setLineWidth(2);
+
+        for (Point2D point : points) {
+            double cx = offsetX + point.getX() * scale;
+            double cy = offsetY + point.getY() * scale;
+            gc.strokeOval(cx - radius, cy - radius, radius * 2, radius * 2);
+        }
+    }
+
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private static double[] rgbToLab(Color color) {
+        double r = pivotRgb(color.getRed());
+        double g = pivotRgb(color.getGreen());
+        double b = pivotRgb(color.getBlue());
+
+        double x = r * 0.4124 + g * 0.3576 + b * 0.1805;
+        double y = r * 0.2126 + g * 0.7152 + b * 0.0722;
+        double z = r * 0.0193 + g * 0.1192 + b * 0.9505;
+
+        double xn = 0.95047;
+        double yn = 1.00000;
+        double zn = 1.08883;
+
+        double fx = pivotXyz(x / xn);
+        double fy = pivotXyz(y / yn);
+        double fz = pivotXyz(z / zn);
+
+        double l = 116 * fy - 16;
+        double a = 500 * (fx - fy);
+        double bLab = 200 * (fy - fz);
+
+        return new double[] { l, a, bLab };
+    }
+
+    private static double pivotRgb(double channel) {
+        return channel > 0.04045 ? Math.pow((channel + 0.055) / 1.055, 2.4) : channel / 12.92;
+    }
+
+    private static double pivotXyz(double t) {
+        double delta = 6.0 / 29.0;
+        return t > Math.pow(delta, 3) ? Math.cbrt(t) : (t / (3 * delta * delta) + 4.0 / 29.0);
+    }
+
+    /** Colori campionati nello stesso punto (relativo) su entrambe le immagini. */
+    private static class CompareSample {
+        final Color color1;
+        final Color color2;
+
+        CompareSample(Color color1, Color color2) {
+            this.color1 = color1;
+            this.color2 = color2;
+        }
+    }
+
+    /**
+     * Cella della GridView: due box colorati (immagine 1 e immagine 2) affiancati, con le
+     * rispettive etichette RGB/Lab.
+     */
+    private static class CompareGridCell extends GridCell<CompareSample> {
+        private final Region swatch1 = new Region();
+        private final Region swatch2 = new Region();
+        private final Label rgbLabel1 = new Label();
+        private final Label labLabel1 = new Label();
+        private final Label rgbLabel2 = new Label();
+        private final Label labLabel2 = new Label();
+        private final HBox root = new HBox(10);
+        private final SimpleIntegerProperty selectedImage;
+
+        CompareGridCell(SimpleIntegerProperty selectedImage) {
+            this.selectedImage = selectedImage;
+
+            swatch1.setPrefSize(SWATCH_SIZE, SWATCH_SIZE);
+            swatch1.setMinSize(SWATCH_SIZE, SWATCH_SIZE);
+            swatch1.setMaxSize(SWATCH_SIZE, SWATCH_SIZE);
+            swatch1.setStyle("-fx-border-color: black; -fx-border-width: 1;");
+
+            swatch2.setPrefSize(SWATCH_SIZE, SWATCH_SIZE);
+            swatch2.setMinSize(SWATCH_SIZE, SWATCH_SIZE);
+            swatch2.setMaxSize(SWATCH_SIZE, SWATCH_SIZE);
+            swatch2.setStyle("-fx-border-color: black; -fx-border-width: 1;");
+
+            VBox labelsBox1 = new VBox(4, rgbLabel1, labLabel1);
+            labelsBox1.setAlignment(Pos.CENTER_LEFT);
+
+            VBox labelsBox2 = new VBox(4, rgbLabel2, labLabel2);
+            labelsBox2.setAlignment(Pos.CENTER_LEFT);
+
+            root.setAlignment(Pos.CENTER_LEFT);
+            root.getChildren().addAll(swatch1, labelsBox1, swatch2, labelsBox2);
+            setGraphic(root);
+
+            updateLabelStyles();
+            selectedImage.addListener((obs, oldVal, newVal) -> updateLabelStyles());
+        }
+
+        /**
+         * Evidenzia in verde le etichette dell'immagine attualmente visualizzata in anteprima,
+         * lasciando in nero quelle dell'altra, in modo che il colore delle etichette sia sempre
+         * coerente con l'immagine mostrata.
+         */
+        private void updateLabelStyles() {
+            boolean isImage1Selected = selectedImage.get() == 1;
+            String activeStyle = "-fx-font-size: 11px; -fx-text-fill: green;";
+            String inactiveStyle = "-fx-font-size: 11px;";
+
+            rgbLabel1.setStyle(isImage1Selected ? activeStyle : inactiveStyle);
+            labLabel1.setStyle(isImage1Selected ? activeStyle : inactiveStyle);
+            rgbLabel2.setStyle(isImage1Selected ? inactiveStyle : activeStyle);
+            labLabel2.setStyle(isImage1Selected ? inactiveStyle : activeStyle);
+        }
+
+        private static String toHex(Color item) {
+            return String.format("#%02X%02X%02X",
+                    (int) (item.getRed() * 255),
+                    (int) (item.getGreen() * 255),
+                    (int) (item.getBlue() * 255));
+        }
+
+        private void updateSwatches(CompareSample sample) {
+            swatch1.setStyle("-fx-background-color: " + toHex(sample.color1)
+                    + "; -fx-border-color: black; -fx-border-width: 1;");
+            swatch2.setStyle("-fx-background-color: " + toHex(sample.color2)
+                    + "; -fx-border-color: black; -fx-border-width: 1;");
+        }
+
+        private void updateLabels(CompareSample sample) {
+            int r1 = (int) Math.round(sample.color1.getRed() * 255);
+            int g1 = (int) Math.round(sample.color1.getGreen() * 255);
+            int b1 = (int) Math.round(sample.color1.getBlue() * 255);
+            rgbLabel1.setText(String.format("RGB: %d, %d, %d", r1, g1, b1));
+            double[] lab1 = rgbToLab(sample.color1);
+            labLabel1.setText(String.format(Locale.ITALIAN, "Lab: %.1f, %.1f, %.1f", lab1[0], lab1[1], lab1[2]));
+
+            int r2 = (int) Math.round(sample.color2.getRed() * 255);
+            int g2 = (int) Math.round(sample.color2.getGreen() * 255);
+            int b2 = (int) Math.round(sample.color2.getBlue() * 255);
+            rgbLabel2.setText(String.format("RGB: %d, %d, %d", r2, g2, b2));
+            double[] lab2 = rgbToLab(sample.color2);
+            labLabel2.setText(String.format(Locale.ITALIAN, "Lab: %.1f, %.1f, %.1f", lab2[0], lab2[1], lab2[2]));
+        }
+
+        @Override
+        protected void updateItem(CompareSample item, boolean empty) {
+            super.updateItem(item, empty);
+            if (empty || item == null) {
+                swatch1.setStyle("");
+                swatch2.setStyle("");
+                rgbLabel1.setText("");
+                labLabel1.setText("");
+                rgbLabel2.setText("");
+                labLabel2.setText("");
+            } else {
+                updateSwatches(item);
+                updateLabels(item);
+                updateLabelStyles();
+            }
+        }
+    }
+}

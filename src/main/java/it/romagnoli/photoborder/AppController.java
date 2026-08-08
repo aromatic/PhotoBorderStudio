@@ -4,7 +4,9 @@ import it.romagnoli.photoborder.dialog.BorderDialog;
 import it.romagnoli.photoborder.dialog.ColorAnalysisDialog;
 import it.romagnoli.photoborder.dialog.CopyrightDialog;
 import it.romagnoli.photoborder.dialog.HistogramDialog;
-
+import it.romagnoli.photoborder.dialog.HueSaturationDialog;
+import it.romagnoli.photoborder.dialog.ImageCompareDialog;
+import it.romagnoli.photoborder.dialog.Utility;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.fxml.FXML;
 import javafx.geometry.Point2D;
@@ -19,6 +21,9 @@ import javafx.scene.paint.Color;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.stage.FileChooser;
+import javafx.stage.FileChooser.ExtensionFilter;
+
+import it.romagnoli.photoborder.raw.RawImageReader;
 
 import javax.imageio.ImageIO;
 import java.io.File;
@@ -40,7 +45,9 @@ public class AppController {
     private final BorderDialog borderDialog = new BorderDialog();
     private final CopyrightDialog copyrightDialog = new CopyrightDialog();
     private final HistogramDialog histogramDialog = new HistogramDialog();
+    private final HueSaturationDialog hueSaturationDialog = new HueSaturationDialog();
     private final ColorAnalysisDialog colorAnalysisDialog = new ColorAnalysisDialog();
+    private final ImageCompareDialog imageCompareDialog = new ImageCompareDialog();
 
     private Image originalImage;
     private WritableImage borderedImage; // immagine con i bordi, usata anche per il salvataggio
@@ -82,6 +89,12 @@ public class AppController {
         // Quando si seleziona/deseleziona una cella colorata, mostra solo il marker corrispondente
         colorAnalysisDialog.selectedIndexProperty().addListener((obs, oldVal, newVal) -> drawColorMarkers());
 
+        // Bottone Reset nel dialog colori: ricampiona e ricentra i marker, azzerando la verifica
+        colorAnalysisDialog.setOnReset(this::refreshColorAnalysis);
+
+        // Dopo la verifica "Toni incarnato", ridisegna i marker colorandoli in verde/rosso
+        colorAnalysisDialog.setOnSkinToneCheckChanged(this::drawColorMarkers);
+
         // Click sull'immagine: se una cella è selezionata, ricampiona colore e punto in quella posizione
         imageView.setOnMouseClicked(this::handleImageClicked);
 
@@ -102,16 +115,23 @@ public class AppController {
     @FXML
     private void handleOpenImage() {
         FileChooser fileChooser = new FileChooser();
-        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Immagini JPG", "*.jpg", "*.jpeg"));
+        fileChooser.setTitle("Open Image File");
+        fileChooser.getExtensionFilters().addAll(
+                new ExtensionFilter("Image Files", Utility.ACCEPTED_EXTENSIONS.stream().map(ext -> "*" + ext).toArray(String[]::new)),
+                new ExtensionFilter("Raw Files", Utility.RAW_EXTENSIONS.stream().map(ext -> "*" + ext).toArray(String[]::new)),
+                new ExtensionFilter("All Files", "*.*"));
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Immagini",
+                String.join(", *", Utility.ACCEPTED_EXTENSIONS)));
         File file = fileChooser.showOpenDialog(null);
 
         if (file != null) {
-            originalImage = new Image(file.toURI().toString());
+            originalImage = loadImage(file);
             imageView.setImage(originalImage);
+            currentBorderOffset = 0;
+            borderedImage = null;
 
-            // Applica i bordi iniziali
-            updateBorders();
             histogramDialog.updateImage(originalImage);
+            hueSaturationDialog.updateImage(originalImage);
 
             if (colorAnalysisDialog.isShowing()) {
                 refreshColorAnalysis();
@@ -122,6 +142,38 @@ public class AppController {
     @FXML
     private void handleExit() {
         javafx.application.Platform.exit();
+    }
+
+    /**
+     * Carica un'immagine da file, supportando anche il formato TIFF (non gestito nativamente
+     * da JavaFX) tramite ImageIO e conversione con {@link SwingFXUtils#toFXImage}. Per gli altri
+     * formati (JPG, GIF, PNG, ...) usa direttamente il costruttore di {@link Image}.
+     */
+    private Image loadImage(File file) {
+        String name = file.getName().toLowerCase(java.util.Locale.ROOT);
+        // raw
+        if (Utility.RAW_EXTENSIONS.stream().anyMatch(name::endsWith)) {
+            try {
+                java.awt.image.BufferedImage bufferedImage = RawImageReader.read(file);
+                return SwingFXUtils.toFXImage(bufferedImage, null);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return null;
+        }
+        // tiff
+        if (name.endsWith(".tif") || name.endsWith(".tiff")) {
+            try {
+                java.awt.image.BufferedImage bufferedImage = ImageIO.read(file);
+                if (bufferedImage != null) {
+                    return SwingFXUtils.toFXImage(bufferedImage, null);
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return null;
+        }
+        return new Image(file.toURI().toString());
     }
 
     @FXML
@@ -141,9 +193,20 @@ public class AppController {
     }
 
     @FXML
+    private void handleShowHueSaturationDialog() {
+        hueSaturationDialog.show();
+        hueSaturationDialog.updateImage(originalImage);
+    }
+
+    @FXML
     private void handleShowColorAnalysisDialog() {
         colorAnalysisDialog.show();
         refreshColorAnalysis();
+    }
+
+    @FXML
+    private void handleShowCompareDialog() {
+        imageCompareDialog.show();
     }
 
     /** Ricalcola i colori campionati dall'immagine e ridisegna i marker in overlay. */
@@ -180,23 +243,25 @@ public class AppController {
         double offsetY = (canvasHeight - displayedHeight) / 2;
 
         double radius = 6;
-        gc.setStroke(Color.RED);
         gc.setLineWidth(2);
 
         int selectedIndex = colorAnalysisDialog.getSelectedIndex();
         if (selectedIndex >= 0 && selectedIndex < colorSamplePoints.size()) {
             // Una cella è selezionata: mostra solo il marker di riferimento di quel colore
-            drawSingleMarker(gc, colorSamplePoints.get(selectedIndex), scale, offsetX, offsetY, radius);
+            drawSingleMarker(gc, colorSamplePoints.get(selectedIndex), selectedIndex, scale, offsetX, offsetY, radius);
         } else {
-            for (Point2D point : colorSamplePoints) {
-                drawSingleMarker(gc, point, scale, offsetX, offsetY, radius);
+            for (int i = 0; i < colorSamplePoints.size(); i++) {
+                drawSingleMarker(gc, colorSamplePoints.get(i), i, scale, offsetX, offsetY, radius);
             }
         }
     }
 
-    /** Disegna un singolo cerchietto rosso (in coordinate immagine originale) sull'overlay. */
-    private void drawSingleMarker(GraphicsContext gc, Point2D point, double scale,
+    /** Disegna un singolo cerchietto (in coordinate immagine originale) sull'overlay: verde se il
+     * colore rispetta il criterio dei toni incarnato (dopo la verifica), rosso altrimenti. */
+    private void drawSingleMarker(GraphicsContext gc, Point2D point, int index, double scale,
                                    double offsetX, double offsetY, double radius) {
+        boolean isValid = colorAnalysisDialog.isSkinToneChecked() && !colorAnalysisDialog.isInvalidSkinTone(index);
+        gc.setStroke(isValid ? Color.GREEN : Color.RED);
         // Sposta il punto (in coordinate immagine originale) nelle coordinate
         // dell'immagine effettivamente mostrata, tenendo conto dei bordi aggiunti.
         double cx = offsetX + (point.getX() + currentBorderOffset) * scale;
@@ -344,7 +409,7 @@ public class AppController {
         updatedPoints.set(selectedIndex, new Point2D(px, py));
         colorSamplePoints = updatedPoints;
 
-        colorAnalysisDialog.updateColorAt(selectedIndex, newColor);
+        colorAnalysisDialog.updateSampleAt(selectedIndex, new Point2D(px, py), newColor);
         drawColorMarkers();
     }
 

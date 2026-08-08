@@ -19,7 +19,11 @@
                 <MenuItem text="Bordo" onAction="#handleShowBorderDialog"/>
                 <MenuItem text="Copyright" onAction="#handleShowCopyrightDialog"/>
                 <MenuItem text="Istogramma" onAction="#handleShowHistogramDialog"/>
+                <MenuItem text="Hue / Saturation" onAction="#handleShowHueSaturationDialog"/>
                 <MenuItem text="Analizza colori" onAction="#handleShowColorAnalysisDialog"/>
+            </Menu>
+            <Menu text="Confronta Immagini">
+                <MenuItem text="Confronta" onAction="#handleShowCompareDialog"/>
             </Menu>
         </MenuBar>
     </top>
