@@ -46,7 +46,7 @@ import java.util.Optional;
  * miniatura permettono di scegliere quale delle due immagini visualizzare come anteprima
  * principale nel dialog.
  */
-public class ImageCompareDialog {
+public class ImageCompareDialog_saved {
 
     private static final int ROWS = 3;
     private static final int COLS = 3;
@@ -76,7 +76,7 @@ public class ImageCompareDialog {
 
     private Dialog<Void> dialog;
 
-    public ImageCompareDialog() {
+    public ImageCompareDialog_saved() {
         gridView.setItems(samples);
         gridView.setCellWidth(CELL_WIDTH);
         gridView.setCellHeight(CELL_HEIGHT);
@@ -94,7 +94,6 @@ public class ImageCompareDialog {
         image2Toggle.setToggleGroup(toggleGroup);
         image1Toggle.setMinHeight(THUMB_SIZE);
         image2Toggle.setMinHeight(THUMB_SIZE);
-
         image1Toggle.setSelected(true);
 
         image1Toggle.setOnAction(e -> {
@@ -128,12 +127,11 @@ public class ImageCompareDialog {
             if (img != null) {
                 image1 = img;
                 fileName1 = file.getName();
-                image1Toggle.setGraphic(createThumbnail(img));
+                image1Toggle.setGraphic(new ImageView(img));
                 image1Toggle.setText(fileName1);
                 previewView.setImage(image1);
                 selectedImage.set(1);
-                updateSamples();
-                System.out.println("Immagine 1 selezionata: " + fileName1);
+                // updateSamples();
             }
         } else {
             return false;
@@ -148,16 +146,16 @@ public class ImageCompareDialog {
             if (img != null) {
                 image2 = img;
                 fileName2 = file.getName();
-                image2Toggle.setGraphic(createThumbnail(img));
+                image2Toggle.setGraphic(new ImageView(img));
                 image2Toggle.setText(fileName2);
                 previewView.setImage(image2);
                 selectedImage.set(2);
-                updateSamples();
-                System.out.println("Immagine 2 selezionata: " + fileName2);
+                // updateSamples();
             }
         } else {
             return false;
         }
+        updateSamples();
         return true;
     }
 
@@ -188,34 +186,59 @@ public class ImageCompareDialog {
             VBox.setVgrow(gridView, Priority.ALWAYS);
             gridView.prefWidthProperty().bind(leftBox.widthProperty());
 
-            StackPane previewBox = new StackPane(previewView, markerCanvas);
+            /*StackPane previewBox = new StackPane(previewView, markerCanvas);
             previewBox.setAlignment(Pos.CENTER);
-            previewBox.setMinSize(0, 0);
-            previewBox.setPrefSize(0, 0);
-            previewBox.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
-
-            // Le due aree della finestra devono occupare ciascuna metà
-            // dello spazio orizzontale disponibile.
-            leftBox.setMinWidth(0);
-            leftBox.setPrefWidth(0);
-            leftBox.setMaxWidth(Double.MAX_VALUE);
-
-            HBox.setHgrow(leftBox, Priority.ALWAYS);
-            HBox.setHgrow(previewBox, Priority.ALWAYS);
+            previewBox.setPadding(new Insets(0, 0, 0, 15));
+            previewBox.setPrefSize(800, 800);
+            previewBox.setMinSize(800, 800);
+            previewBox.setMaxSize(800, 800);
+            previewView.setFitWidth(800);
+            previewView.setFitHeight(800);
+            markerCanvas.setWidth(800);
+            markerCanvas.setHeight(800);
 
             HBox topArea = new HBox(15, leftBox, previewBox);
-            topArea.setFillHeight(true);
 
-            // L'ImageView viene ridimensionato automaticamente nello spazio
-            // disponibile, mantenendo il rapporto originale dell'immagine.
-            previewView.setPreserveRatio(true);
-            previewView.setSmooth(true);
-            previewView.fitWidthProperty().bind(previewBox.widthProperty());
-            previewView.fitHeightProperty().bind(previewBox.heightProperty());
+            // Il box dei colori occupa 1/3 della larghezza disponibile, l'anteprima
+            // dell'immagine ha dimensione fissa 800x800 ed è centrata nello spazio restante.
+            leftBox.prefWidthProperty().bind(topArea.widthProperty().multiply(1.0 / 3.0));
+            leftBox.setMinWidth(Region.USE_PREF_SIZE);
+            leftBox.setMaxWidth(Region.USE_PREF_SIZE);
 
-            // Il canvas segue esattamente le dimensioni dell'area di anteprima.
-            markerCanvas.widthProperty().bind(previewBox.widthProperty());
-            markerCanvas.heightProperty().bind(previewBox.heightProperty());
+            HBox.setHgrow(previewBox, Priority.ALWAYS); */
+
+
+            StackPane previewBox = new StackPane(previewView, markerCanvas);
+previewBox.setAlignment(Pos.CENTER);
+previewBox.setPadding(new Insets(0, 0, 0, 15));
+
+HBox topArea = new HBox(15, leftBox, previewBox);
+
+// 50% della finestra ciascuno
+HBox.setHgrow(leftBox, Priority.ALWAYS);
+HBox.setHgrow(previewBox, Priority.ALWAYS);
+
+leftBox.prefWidthProperty().bind(topArea.widthProperty().multiply(0.5));
+previewBox.prefWidthProperty().bind(topArea.widthProperty().multiply(0.5));
+
+leftBox.setMinWidth(0);
+leftBox.setMaxWidth(Double.MAX_VALUE);
+
+previewBox.setMinSize(0, 0);
+previewBox.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
+
+// L'immagine si adatta allo spazio disponibile mantenendo le proporzioni
+previewView.setPreserveRatio(true);
+previewView.fitWidthProperty().bind(
+        previewBox.widthProperty().subtract(15)
+);
+previewView.fitHeightProperty().bind(
+        previewBox.heightProperty()
+);
+
+// Canvas dell'overlay segue esattamente il previewBox
+markerCanvas.widthProperty().bind(previewBox.widthProperty());
+markerCanvas.heightProperty().bind(previewBox.heightProperty());
 
             VBox content = new VBox(10, topArea);
             content.setPadding(new Insets(15));
@@ -237,34 +260,6 @@ public class ImageCompareDialog {
     public void reset() {
         image1 = null;
         image2 = null;
-
-        fileName1 = null;
-        fileName2 = null;
-
-        points1 = List.of();
-        points2 = List.of();
-
-        samples.clear();
-
-        previewView.setImage(null);
-
-        markerCanvas.getGraphicsContext2D().clearRect(
-                0,
-                0,
-                markerCanvas.getWidth(),
-                markerCanvas.getHeight()
-        );
-
-        image1Toggle.setGraphic(null);
-        image2Toggle.setGraphic(null);
-
-        image1Toggle.setText("");
-        image2Toggle.setText("");
-
-        image1Toggle.setSelected(false);
-        image2Toggle.setSelected(false);
-
-        selectedImage.set(1);
     }
 
     private static final List<String> RAW_EXTENSIONS = List.of(
@@ -274,21 +269,6 @@ public class ImageCompareDialog {
     private static final List<String> ACCEPTED_EXTENSIONS = List.of(
             ".jpg", ".jpeg", ".gif", ".tif", ".tiff",
             ".cr2", ".nef", ".arw", ".dng", ".raf", ".orf", ".rw2");
-
-
-    private static ImageView createThumbnail(Image image) {
-        ImageView view = new ImageView(image);
-
-        view.setPreserveRatio(true);
-        view.setSmooth(true);
-
-        view.setFitWidth(THUMB_SIZE);
-        view.setFitHeight(THUMB_SIZE);
-
-        view.setMouseTransparent(true);
-
-        return view;
-    }
 
     private static Image loadImage(File file) {
         String name = file.getName().toLowerCase(Locale.ROOT);

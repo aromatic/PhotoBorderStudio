@@ -15,19 +15,9 @@
 
 
     <properties>
-
-        <project.build.sourceEncoding>
-            UTF-8
-        </project.build.sourceEncoding>
-
-        <maven.compiler.release>
-            21
-        </maven.compiler.release>
-
-        <javafx.version>
-            21
-        </javafx.version>
-
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.release>21</maven.compiler.release>
+        <javafx.version>21</javafx.version>
     </properties>
 
 
@@ -73,6 +63,9 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.13.0</version>
+                <configuration>
+                    <release>21</release>
+                </configuration>
             </plugin>
 
             <plugin>
