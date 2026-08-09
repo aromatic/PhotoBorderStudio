@@ -5,9 +5,11 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.fxml.FXML;
+import javafx.event.ActionEvent;
 import javafx.geometry.Insets;
 import javafx.geometry.Point2D;
 import javafx.geometry.Pos;
+import javafx.scene.control.Button;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.ButtonType;
@@ -180,6 +182,15 @@ public class ImageCompareDialog {
             dialog.setResizable(true);
             dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
 
+            Button closeButton =
+                    (Button) dialog.getDialogPane()
+                            .lookupButton(ButtonType.CLOSE);
+
+            closeButton.addEventFilter(ActionEvent.ACTION, event -> {
+                reset();
+                dialog.close();
+                dialog = null;
+            });
             HBox thumbsBox = new HBox(8, image1Toggle, image2Toggle);
             thumbsBox.setAlignment(Pos.CENTER_LEFT);
 
