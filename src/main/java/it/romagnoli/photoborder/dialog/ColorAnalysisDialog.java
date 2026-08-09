@@ -33,6 +33,18 @@ import java.util.Locale;
 import java.util.Set;
 import javafx.collections.ObservableSet;
 
+import java.io.File;
+import java.util.function.Predicate;
+import javafx.scene.image.ImageView;
+import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.IntegerProperty;
+import javafx.beans.property.SimpleIntegerProperty;
+import javafx.beans.property.SimpleObjectProperty;
+import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.ReadOnlyObjectProperty;
+
+
 /**
  * Dialog non modale e ridimensionabile che mostra una GridView di ControlsFX con 9 celle (3x3)
  * rappresentanti i colori dell'immagine campionati nei punti di intersezione della regola dei terzi.
@@ -65,6 +77,10 @@ public class ColorAnalysisDialog {
     private Runnable onReset;
     private Runnable onSkinToneCheckChanged;
 
+    private List<Point2D> points;
+    private File currentImageFile;
+    private ImageView imageView;
+
     public ColorAnalysisDialog() {
         gridView.setItems(samples);
         gridView.setCellWidth(CELL_WIDTH);
@@ -82,6 +98,21 @@ public class ColorAnalysisDialog {
         skinToneWarningLabel.setStyle("-fx-text-fill: red; -fx-font-weight: bold;");
         skinToneWarningLabel.setVisible(false);
         skinToneWarningLabel.setManaged(false);
+
+       
+    }
+
+    public void setImageView(ImageView imageView) {
+        this.imageView = imageView;
+    }
+    
+    public void setCurrentImageFile(File file) {
+         if (file != null) {
+            String fileName = file.getName();
+            int dotIndex = fileName.lastIndexOf('.');
+            String nameWithoutExt = (dotIndex == -1) ? fileName : fileName.substring(0, dotIndex);
+            this.currentImageFile = new File(file.getParentFile(), nameWithoutExt + "_ptx.csv");
+        }
     }
 
     /** Callback invocata quando il dialog viene chiuso (per rimuovere i marker dall'immagine). */
@@ -168,7 +199,23 @@ public class ColorAnalysisDialog {
                 }
             });
 
-            HBox bottomBar = new HBox(10, infoLabel, resetButton);
+            Button savePointsButton = new Button("Salva punti");
+
+            savePointsButton.setOnAction(
+                    e -> Utility.salvaSchemaPunti(currentImageFile, imageView, points)
+            );
+
+            Button loadPointsButton = new Button("Leggi schema punti");
+
+            loadPointsButton.setOnAction(
+                    e -> {
+                        points = Utility.leggiSchemaPunti(imageView, selectedIndex);
+
+                        updateColors(imageView.getImage(), points);
+                    }
+            );
+
+            HBox bottomBar = new HBox(10, infoLabel, savePointsButton, loadPointsButton, resetButton);
             bottomBar.setAlignment(Pos.CENTER_LEFT);
             HBox.setHgrow(infoLabel, Priority.ALWAYS);
 
@@ -238,7 +285,7 @@ public class ColorAnalysisDialog {
      */
     private void checkSkinTones() {
         skinToneWarningLabel.setText("Toni incarnato non validi");
-        applySkinToneCheck(ColorAnalysisDialog::isBasicSkinTone);
+        applySkinToneCheck(ColorTools::isBasicSkinTone);
     }
 
     /**
@@ -250,7 +297,7 @@ public class ColorAnalysisDialog {
      */
     private void checkCaucasianSkinTones() {
         skinToneWarningLabel.setText("Toni incarnato caucasico non validi");
-        applySkinToneCheck(ColorAnalysisDialog::isCaucasianSkinTone);
+        applySkinToneCheck(ColorTools::isCaucasianSkinTone);
     }
 
     /**
@@ -262,7 +309,7 @@ public class ColorAnalysisDialog {
      */
     private void checkLatinSkinTones() {
         skinToneWarningLabel.setText("Toni incarnato latino non validi");
-        applySkinToneCheck(ColorAnalysisDialog::isLatinSkinTone);
+        applySkinToneCheck(ColorTools::isLatinSkinTone);
     }
 
     /**
@@ -274,7 +321,7 @@ public class ColorAnalysisDialog {
      */
     private void checkOrientalSkinTones() {
         skinToneWarningLabel.setText("Toni incarnato orientale non validi");
-        applySkinToneCheck(ColorAnalysisDialog::isOrientalSkinTone);
+        applySkinToneCheck(ColorTools::isOrientalSkinTone);
     }
 
     /**
@@ -286,7 +333,7 @@ public class ColorAnalysisDialog {
      */
     private void checkAfricanSkinTones() {
         skinToneWarningLabel.setText("Toni incarnato africano non validi");
-        applySkinToneCheck(ColorAnalysisDialog::isAfricanSkinTone);
+        applySkinToneCheck(ColorTools::isAfricanSkinTone);
     }
 
     /**
@@ -297,7 +344,7 @@ public class ColorAnalysisDialog {
      */
     private void checkVegetation() {
         skinToneWarningLabel.setText("Toni vegetazione non validi");
-        applySkinToneCheck(ColorAnalysisDialog::isVegetation);
+        applySkinToneCheck(ColorTools::isVegetation);
     }
 
     /**
@@ -307,7 +354,7 @@ public class ColorAnalysisDialog {
      */
     private void checkSky() {
         skinToneWarningLabel.setText("Toni cielo non validi");
-        applySkinToneCheck(ColorAnalysisDialog::isSky);
+        applySkinToneCheck(ColorTools::isSky);
     }
 
     /** Applica il predicato di validità fornito a tutte le celle campionate ed evidenzia quelle non valide. */
@@ -318,7 +365,7 @@ public class ColorAnalysisDialog {
             if (sample == null || sample.original == null) {
                 continue;
             }
-            double[] lab = rgbToLab(sample.original);
+            double[] lab = ColorTools.rgbToLab(sample.original);
             if (!validator.test(lab)) {
                 invalid.add(i);
             }
@@ -336,105 +383,14 @@ public class ColorAnalysisDialog {
         }
     }
 
-    /** Regola base dei toni incarnato: a > 0, b > 0, b >= a. */
-    private static boolean isBasicSkinTone(double[] lab) {
-        double a = lab[1];
-        double b = lab[2];
-        return a > 0 && b > 0 && b >= a;
-    }
-
-    /**
-     * Regola "incarnato caucasico": regola base + Croma in (7,6; 21,6) + L in [76, 92],
-     * a in [6, 16], b in [5, 15].
-     */
-    private static boolean isCaucasianSkinTone(double[] lab) {
-        double l = lab[0];
-        double a = lab[1];
-        double b = lab[2];
-        double chroma = Math.sqrt(a * a + b * b);
-        return isBasicSkinTone(lab)
-                && chroma > 7.6 && chroma < 21.6
-                && l >= 76 && l <= 92
-                && a >= 6 && a <= 16
-                && b >= 5 && b <= 15;
-    }
-
-    /**
-     * Regola "incarnato latino": regola base + Croma in (18,8; 39,5) + L in [60, 86],
-     * a in [10, 24], b in [15, 33].
-     */
-    private static boolean isLatinSkinTone(double[] lab) {
-        double l = lab[0];
-        double a = lab[1];
-        double b = lab[2];
-        double chroma = Math.sqrt(a * a + b * b);
-        return isBasicSkinTone(lab)
-                && chroma > 18.8 && chroma < 39.5
-                && l >= 60 && l <= 86
-                && a >= 10 && a <= 24
-                && b >= 15 && b <= 33;
-    }
-
-    /**
-     * Regola "incarnato orientale": regola base + Croma in (22,2; 37,3) + L in [45, 75],
-     * a in [14, 26], b in [16, 28].
-     */
-    private static boolean isOrientalSkinTone(double[] lab) {
-        double l = lab[0];
-        double a = lab[1];
-        double b = lab[2];
-        double chroma = Math.sqrt(a * a + b * b);
-        return isBasicSkinTone(lab)
-                && chroma > 22.2 && chroma < 37.3
-                && l >= 45 && l <= 75
-                && a >= 14 && a <= 26
-                && b >= 16 && b <= 28;
-    }
-
-    /**
-     * Regola "incarnato africano": regola base + Croma in (16; 40,8) + L in [32, 68],
-     * a in [11, 28], b in [11, 29].
-     */
-    private static boolean isAfricanSkinTone(double[] lab) {
-        double l = lab[0];
-        double a = lab[1];
-        double b = lab[2];
-        double chroma = Math.sqrt(a * a + b * b);
-        return isBasicSkinTone(lab)
-                && chroma > 16 && chroma < 40.8
-                && l >= 32 && l <= 68
-                && a >= 11 && a <= 28
-                && b >= 11 && b <= 29;
-    }
-
-    /**
-     * Regola "vegetazione": a &lt; 0, b &gt; 0, e 1,2*|a| &lt;= b &lt;= 3*|a|.
-     */
-    private static boolean isVegetation(double[] lab) {
-        double a = lab[1];
-        double b = lab[2];
-        if (!(a < 0 && b > 0)) {
-            return false;
-        }
-        double absA = Math.abs(a);
-        return b >= 1.2 * absA && b <= 3 * absA;
-    }
-
-    /**
-     * Regola "cielo": b &lt; 0, a compreso tra -5 e 3.
-     */
-    private static boolean isSky(double[] lab) {
-        double a = lab[1];
-        double b = lab[2];
-        return b < 0 && a >= -5 && a <= 3;
-    }
+   
 
     /**
      * Calcola i 9 punti (in coordinate pixel dell'immagine) corrispondenti alle
      * intersezioni della regola dei terzi, ordinati per righe (alto-sinistra -> basso-destra).
      */
-    public static List<Point2D> computeSamplePoints(double width, double height) {
-        List<Point2D> points = new ArrayList<>(ROWS * COLS);
+    public List<Point2D> computeSamplePoints(double width, double height) {
+        points = new ArrayList<>(ROWS * COLS);
         for (double fy : FRACTIONS) {
             for (double fx : FRACTIONS) {
                 points.add(new Point2D(width * fx, height * fy));
@@ -451,7 +407,7 @@ public class ColorAnalysisDialog {
      * @return la lista dei punti campionati (coordinate pixel dell'immagine originale), utile al
      *         chiamante per disegnare i marker senza alterare l'immagine.
      */
-    public List<Point2D> updateColors(Image image) {
+    public List<Point2D> updateColors(Image image, List<Point2D> newPoints){
         selectedIndex.set(-1); // nuova immagine: azzera l'eventuale selezione precedente
         invalidSkinTones.clear();
         skinToneChecked = false;
@@ -466,7 +422,7 @@ public class ColorAnalysisDialog {
 
         double width = image.getWidth();
         double height = image.getHeight();
-        List<Point2D> points = computeSamplePoints(width, height);
+        points = newPoints != null ? newPoints : computeSamplePoints(width, height);
         PixelReader reader = image.getPixelReader();
 
         List<ColorSample> newSamples = new ArrayList<>(points.size());
@@ -484,45 +440,6 @@ public class ColorAnalysisDialog {
 
     private static int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
-    }
-
-    /**
-     * Converte un colore RGB (componenti 0-1) nello spazio CIE L*a*b* (D65),
-     * restituendo un array {L, a, b}.
-     */
-    private static double[] rgbToLab(Color color) {
-        double r = pivotRgb(color.getRed());
-        double g = pivotRgb(color.getGreen());
-        double b = pivotRgb(color.getBlue());
-
-        // Conversione sRGB lineare -> XYZ (matrice standard, illuminante D65)
-        double x = r * 0.4124 + g * 0.3576 + b * 0.1805;
-        double y = r * 0.2126 + g * 0.7152 + b * 0.0722;
-        double z = r * 0.0193 + g * 0.1192 + b * 0.9505;
-
-        // Bianco di riferimento D65
-        double xn = 0.95047;
-        double yn = 1.00000;
-        double zn = 1.08883;
-
-        double fx = pivotXyz(x / xn);
-        double fy = pivotXyz(y / yn);
-        double fz = pivotXyz(z / zn);
-
-        double l = 116 * fy - 16;
-        double a = 500 * (fx - fy);
-        double bLab = 200 * (fy - fz);
-
-        return new double[] { l, a, bLab };
-    }
-
-    private static double pivotRgb(double channel) {
-        return channel > 0.04045 ? Math.pow((channel + 0.055) / 1.055, 2.4) : channel / 12.92;
-    }
-
-    private static double pivotXyz(double t) {
-        double delta = 6.0 / 29.0;
-        return t > Math.pow(delta, 3) ? Math.cbrt(t) : (t / (3 * delta * delta) + 4.0 / 29.0);
     }
 
     /**
@@ -624,7 +541,7 @@ public class ColorAnalysisDialog {
                 int b = (int) Math.round(sample.original.getBlue() * 255);
                 rgbLabel.setText(String.format("RGB: %d, %d, %d", r, g, b));
 
-                double[] lab = rgbToLab(sample.original);
+                double[] lab = ColorTools.rgbToLab(sample.original);
                 labLabel.setText(String.format(Locale.ITALIAN, "Lab: %.1f, %.1f, %.1f", lab[0], lab[1], lab[2]));
 
                 boolean isInvalidSkinTone = !isEmpty() && invalidSkinTones.contains(getIndex());
@@ -651,4 +568,7 @@ public class ColorAnalysisDialog {
             }
         }
     }
+
+
+
 }

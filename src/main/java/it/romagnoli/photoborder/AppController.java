@@ -41,6 +41,8 @@ public class AppController {
 
     @FXML
     private MenuItem saveMenuItem;
+    
+    private File file; // file immagine attualmente aperto
 
     private final BorderDialog borderDialog = new BorderDialog();
     private final CopyrightDialog copyrightDialog = new CopyrightDialog();
@@ -122,7 +124,7 @@ public class AppController {
                 new ExtensionFilter("All Files", "*.*"));
         fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Immagini",
                 String.join(", *", Utility.ACCEPTED_EXTENSIONS)));
-        File file = fileChooser.showOpenDialog(null);
+        file = fileChooser.showOpenDialog(null);
 
         if (file != null) {
             originalImage = loadImage(file);
@@ -132,6 +134,9 @@ public class AppController {
 
             histogramDialog.updateImage(originalImage);
             hueSaturationDialog.updateImage(originalImage);
+
+            colorAnalysisDialog.setImageView(imageView);
+            colorAnalysisDialog.setCurrentImageFile(file);
 
             if (colorAnalysisDialog.isShowing()) {
                 refreshColorAnalysis();
@@ -211,7 +216,7 @@ public class AppController {
 
     /** Ricalcola i colori campionati dall'immagine e ridisegna i marker in overlay. */
     private void refreshColorAnalysis() {
-        colorSamplePoints = colorAnalysisDialog.updateColors(originalImage);
+        colorSamplePoints = colorAnalysisDialog.updateColors(originalImage, null);
         drawColorMarkers();
     }
 
