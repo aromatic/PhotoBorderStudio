@@ -6,7 +6,6 @@ import it.romagnoli.photoborder.dialog.CopyrightDialog;
 import it.romagnoli.photoborder.dialog.HistogramDialog;
 import it.romagnoli.photoborder.dialog.HueSaturationDialog;
 import it.romagnoli.photoborder.dialog.ImageCompareDialog;
-import it.romagnoli.photoborder.dialog.Utility;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.fxml.FXML;
 import javafx.geometry.Point2D;
@@ -24,6 +23,9 @@ import javafx.stage.FileChooser;
 import javafx.stage.FileChooser.ExtensionFilter;
 
 import it.romagnoli.photoborder.raw.RawImageReader;
+import it.romagnoli.photoborder.utils.MarkerPoints;
+import it.romagnoli.photoborder.utils.PointTools;
+import it.romagnoli.photoborder.utils.Utility;
 
 import javax.imageio.ImageIO;
 import java.io.File;
@@ -31,7 +33,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-public class AppController {
+public class AppController implements MarkerPoints {
 
     @FXML
     private ImageView imageView;
@@ -137,6 +139,7 @@ public class AppController {
 
             colorAnalysisDialog.setImageView(imageView);
             colorAnalysisDialog.setCurrentImageFile(file);
+            colorAnalysisDialog.setMarkerPoints(this);
 
             if (colorAnalysisDialog.isShowing()) {
                 refreshColorAnalysis();
@@ -217,6 +220,7 @@ public class AppController {
     /** Ricalcola i colori campionati dall'immagine e ridisegna i marker in overlay. */
     private void refreshColorAnalysis() {
         colorSamplePoints = colorAnalysisDialog.updateColors(originalImage, null);
+        System.out.println("RICALCOLO  E RIDISEGNO points="+colorSamplePoints);
         drawColorMarkers();
     }
 
@@ -224,7 +228,7 @@ public class AppController {
      * Disegna dei cerchietti rossi sull'overlay in corrispondenza dei punti della
      * regola dei terzi, senza alterare in alcun modo l'immagine sottostante.
      */
-    private void drawColorMarkers() {
+    public void drawColorMarkers() {
         GraphicsContext gc = markerCanvas.getGraphicsContext2D();
         gc.clearRect(0, 0, markerCanvas.getWidth(), markerCanvas.getHeight());
 
@@ -272,36 +276,7 @@ public class AppController {
         double cx = offsetX + (point.getX() + currentBorderOffset) * scale;
         double cy = offsetY + (point.getY() + currentBorderOffset) * scale;
         gc.strokeOval(cx - radius, cy - radius, radius * 2, radius * 2);
-    }
-
-    /**
-     * Calcola il fattore di scala tra l'immagine effettivamente mostrata e l'area disponibile,
-     * oppure -1 se non calcolabile (nessuna immagine o area non ancora dimensionata).
-     */
-    private double computeDisplayScale() {
-        Image displayedImage = imageView.getImage();
-        if (displayedImage == null) {
-            return -1;
-        }
-        double imgWidth = displayedImage.getWidth();
-        double imgHeight = displayedImage.getHeight();
-        double canvasWidth = markerCanvas.getWidth();
-        double canvasHeight = markerCanvas.getHeight();
-        if (imgWidth <= 0 || imgHeight <= 0 || canvasWidth <= 0 || canvasHeight <= 0) {
-            return -1;
-        }
-        return Math.min(canvasWidth / imgWidth, canvasHeight / imgHeight);
-    }
-
-    /**
-     * Converte un punto in coordinate immagine originale nelle coordinate locali dell'ImageView
-     * (stesso sistema di riferimento degli eventi mouse su imageView, senza offset di centratura).
-     */
-    private Point2D toImageViewLocalCoordinates(Point2D originalPoint, double scale) {
-        return new Point2D(
-            (originalPoint.getX() + currentBorderOffset) * scale,
-            (originalPoint.getY() + currentBorderOffset) * scale
-        );
+        System.out.println("Disegnato marker: index=" + index + ", cx=" + cx + ", cy=" + cy + ", radius=" + radius);    
     }
 
     /**
@@ -314,7 +289,7 @@ public class AppController {
             return;
         }
 
-        double scale = computeDisplayScale();
+        double scale = PointTools.computeDisplayScale(imageView, markerCanvas);
         if (scale <= 0) {
             colorAnalysisDialog.setHoveredIndex(-1);
             return;
@@ -326,13 +301,13 @@ public class AppController {
 
         if (selectedIndex >= 0 && selectedIndex < colorSamplePoints.size()) {
             // Solo il marker selezionato è visibile: considera solo quello per l'hover
-            Point2D local = toImageViewLocalCoordinates(colorSamplePoints.get(selectedIndex), scale);
+            Point2D local = PointTools.toImageViewLocalCoordinates(colorSamplePoints.get(selectedIndex), scale, currentBorderOffset);
             if (Math.hypot(local.getX() - event.getX(), local.getY() - event.getY()) <= hitRadius) {
                 hovered = selectedIndex;
             }
         } else {
             for (int i = 0; i < colorSamplePoints.size(); i++) {
-                Point2D local = toImageViewLocalCoordinates(colorSamplePoints.get(i), scale);
+                Point2D local = PointTools.toImageViewLocalCoordinates(colorSamplePoints.get(i), scale, currentBorderOffset);
                 if (Math.hypot(local.getX() - event.getX(), local.getY() - event.getY()) <= hitRadius) {
                     hovered = i;
                     break;
@@ -384,7 +359,7 @@ public class AppController {
             return;
         }
 
-        double scale = computeDisplayScale();
+        double scale = PointTools.computeDisplayScale(imageView, markerCanvas);
         if (scale <= 0) {
             return;
         }
@@ -399,8 +374,8 @@ public class AppController {
 
         int originalWidth = (int) originalImage.getWidth();
         int originalHeight = (int) originalImage.getHeight();
-        int px = clamp((int) Math.round(origX), 0, originalWidth - 1);
-        int py = clamp((int) Math.round(origY), 0, originalHeight - 1);
+        int px = PointTools.clamp((int) Math.round(origX), 0, originalWidth - 1);
+        int py = PointTools.clamp((int) Math.round(origY), 0, originalHeight - 1);
 
         // Se il click cade fuori dall'area dell'immagine originale (sul bordo), ignora
         if (origX < 0 || origY < 0 || origX >= originalWidth || origY >= originalHeight) {
@@ -416,10 +391,6 @@ public class AppController {
 
         colorAnalysisDialog.updateSampleAt(selectedIndex, new Point2D(px, py), newColor);
         drawColorMarkers();
-    }
-
-    private static int clamp(int value, int min, int max) {
-        return Math.max(min, Math.min(max, value));
     }
 
     private void applyBorders(double whiteBorderPixels, double blackBorderPixels) {

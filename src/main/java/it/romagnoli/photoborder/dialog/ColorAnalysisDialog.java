@@ -25,6 +25,11 @@ import javafx.scene.paint.Color;
 import org.controlsfx.control.GridCell;
 import org.controlsfx.control.GridView;
 
+import it.romagnoli.photoborder.utils.ColorTools;
+import it.romagnoli.photoborder.utils.MarkerPoints;
+import it.romagnoli.photoborder.utils.PointTools;
+import it.romagnoli.photoborder.utils.Utility;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -34,15 +39,7 @@ import java.util.Set;
 import javafx.collections.ObservableSet;
 
 import java.io.File;
-import java.util.function.Predicate;
 import javafx.scene.image.ImageView;
-import javafx.beans.property.SimpleBooleanProperty;
-import javafx.beans.property.BooleanProperty;
-import javafx.beans.property.IntegerProperty;
-import javafx.beans.property.SimpleIntegerProperty;
-import javafx.beans.property.SimpleObjectProperty;
-import javafx.beans.property.ObjectProperty;
-import javafx.beans.property.ReadOnlyObjectProperty;
 
 
 /**
@@ -80,8 +77,9 @@ public class ColorAnalysisDialog {
     private List<Point2D> points;
     private File currentImageFile;
     private ImageView imageView;
+    private MarkerPoints markerPoints;
 
-    public ColorAnalysisDialog() {
+    public ColorAnalysisDialog() { 
         gridView.setItems(samples);
         gridView.setCellWidth(CELL_WIDTH);
         gridView.setCellHeight(CELL_HEIGHT);
@@ -100,6 +98,10 @@ public class ColorAnalysisDialog {
         skinToneWarningLabel.setManaged(false);
 
        
+    }
+
+    public void setMarkerPoints(MarkerPoints markerPoints) {
+        this.markerPoints = markerPoints;
     }
 
     public void setImageView(ImageView imageView) {
@@ -210,8 +212,8 @@ public class ColorAnalysisDialog {
             loadPointsButton.setOnAction(
                     e -> {
                         points = Utility.leggiSchemaPunti(imageView, selectedIndex);
-
                         updateColors(imageView.getImage(), points);
+                        markerPoints.drawColorMarkers();
                     }
             );
 
@@ -427,20 +429,16 @@ public class ColorAnalysisDialog {
 
         List<ColorSample> newSamples = new ArrayList<>(points.size());
         for (Point2D p : points) {
-            int x = clamp((int) Math.round(p.getX()), 0, (int) width - 1);
-            int y = clamp((int) Math.round(p.getY()), 0, (int) height - 1);
+            int x = PointTools.clamp((int) Math.round(p.getX()), 0, (int) width - 1);
+            int y = PointTools.clamp((int) Math.round(p.getY()), 0, (int) height - 1);
             newSamples.add(new ColorSample(p, reader.getColor(x, y)));
         }
 
         samples.setAll(newSamples);
-        infoLabel.setText("Colori campionati sui punti della regola dei terzi ("
-                + (int) width + "x" + (int) height + " px)");
+        infoLabel.setText("Calc: (" + java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")) + ")");
         return points;
     }
 
-    private static int clamp(int value, int min, int max) {
-        return Math.max(min, Math.min(max, value));
-    }
 
     /**
      * Dati associati a una cella: il punto campionato (coordinate pixel immagine originale)

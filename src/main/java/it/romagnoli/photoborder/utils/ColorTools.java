@@ -1,4 +1,4 @@
-package it.romagnoli.photoborder.dialog;
+package it.romagnoli.photoborder.utils;
 
 import javafx.scene.paint.Color;
 
