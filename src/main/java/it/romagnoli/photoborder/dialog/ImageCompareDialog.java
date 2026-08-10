@@ -28,8 +28,9 @@ import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.stage.Window;
 import javafx.stage.FileChooser;
-
+import javafx.stage.FileChooser.ExtensionFilter;
 import it.romagnoli.photoborder.raw.RawImageReader;
+import it.romagnoli.photoborder.utils.Utility;
 
 import org.controlsfx.control.GridCell;
 import org.controlsfx.control.GridView;
@@ -120,13 +121,9 @@ public class ImageCompareDialog {
     }
 
     public boolean chooseImages() {
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Immagini",
-                "*.jpg", "*.jpeg", "*.gif", "*.tif", "*.tiff"));
-        File file = fileChooser.showOpenDialog(null);
-
+        File file = Utility.openFileChooser();
         if (file != null) {
-            Image img = loadImage(file);
+            Image img = Utility.loadImage(file);
             if (img != null) {
                 image1 = img;
                 fileName1 = file.getName();
@@ -134,19 +131,16 @@ public class ImageCompareDialog {
                 image1Toggle.setText(fileName1);
                 previewView.setImage(image1);
                 selectedImage.set(1);
-                updateSamples();
+                updateColors();
                 System.out.println("Immagine 1 selezionata: " + fileName1);
             }
         } else {
             return false;
         }
         
-        fileChooser = new FileChooser();
-        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Immagini",
-                "*.jpg", "*.jpeg", "*.gif", "*.tif", "*.tiff"));
-        file = fileChooser.showOpenDialog(null);
+        file = Utility.openFileChooser();
         if (file != null) {
-            Image img = loadImage(file);
+            Image img = Utility.loadImage(file);
             if (img != null) {
                 image2 = img;
                 fileName2 = file.getName();
@@ -154,7 +148,7 @@ public class ImageCompareDialog {
                 image2Toggle.setText(fileName2);
                 previewView.setImage(image2);
                 selectedImage.set(2);
-                updateSamples();
+                updateColors();
                 System.out.println("Immagine 2 selezionata: " + fileName2);
             }
         } else {
@@ -236,7 +230,7 @@ public class ImageCompareDialog {
             dialog.getDialogPane().setPrefSize(1150, 860);
         }
 
-        updateSamples();
+        updateColors();
         dialog.show();
     }
 
@@ -301,33 +295,6 @@ public class ImageCompareDialog {
         return view;
     }
 
-    private static Image loadImage(File file) {
-        String name = file.getName().toLowerCase(Locale.ROOT);
-
-        if (RAW_EXTENSIONS.stream().anyMatch(name::endsWith)) {
-            try {
-                java.awt.image.BufferedImage bufferedImage = RawImageReader.read(file);
-                return SwingFXUtils.toFXImage(bufferedImage, null);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            return null;
-        }
-
-        if (name.endsWith(".tif") || name.endsWith(".tiff")) {
-            try {
-                java.awt.image.BufferedImage bufferedImage = javax.imageio.ImageIO.read(file);
-                if (bufferedImage != null) {
-                    return SwingFXUtils.toFXImage(bufferedImage, null);
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            return null;
-        }
-        return new Image(file.toURI().toString());
-    }
-
     private static List<Point2D> computeSamplePoints(double width, double height) {
         List<Point2D> points = new ArrayList<>(ROWS * COLS);
         for (double fy : FRACTIONS) {
@@ -338,7 +305,7 @@ public class ImageCompareDialog {
         return points;
     }
 
-    private void updateSamples() {
+    private void updateColors() {
         if (image1 == null || image2 == null) {
             return;
         }

@@ -6,6 +6,8 @@ import java.util.Locale;
 
 import javax.imageio.ImageIO;
 
+import it.romagnoli.photoborder.raw.RawImageReader;
+
 import java.io.File;
 import java.io.PrintWriter;
 import java.io.BufferedWriter;
@@ -152,6 +154,52 @@ public class Utility {
             }
         }
     }
+
+
+
+    /**
+     * Carica un'immagine da file, supportando anche il formato TIFF (non gestito nativamente
+     * da JavaFX) tramite ImageIO e conversione con {@link SwingFXUtils#toFXImage}. Per gli altri
+     * formati (JPG, GIF, PNG, ...) usa direttamente il costruttore di {@link Image}.
+     */
+    public static Image loadImage(File file) {
+        String name = file.getName().toLowerCase(java.util.Locale.ROOT);
+        // raw
+        if (Utility.RAW_EXTENSIONS.stream().anyMatch(name::endsWith)) {
+            try {
+                java.awt.image.BufferedImage bufferedImage = RawImageReader.read(file);
+                return SwingFXUtils.toFXImage(bufferedImage, null);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return null;
+        }
+        // tiff
+        if (name.endsWith(".tif") || name.endsWith(".tiff")) {
+            try {
+                java.awt.image.BufferedImage bufferedImage = ImageIO.read(file);
+                if (bufferedImage != null) {
+                    return SwingFXUtils.toFXImage(bufferedImage, null);
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return null;
+        }
+        return new Image(file.toURI().toString());
+    }
+
+	public static File openFileChooser() {
+		FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Open Image File");
+        fileChooser.getExtensionFilters().addAll(
+                new ExtensionFilter("Image Files", ACCEPTED_EXTENSIONS.stream().map(ext -> "*" + ext).toArray(String[]::new)),
+                new ExtensionFilter("Raw Files", RAW_EXTENSIONS.stream().map(ext -> "*" + ext).toArray(String[]::new)),
+                new ExtensionFilter("All Files", "*.*"));
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Immagini",
+                String.join(", *", ACCEPTED_EXTENSIONS)));
+        return fileChooser.showOpenDialog(null);
+	}
 }
 
 

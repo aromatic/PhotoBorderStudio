@@ -117,18 +117,10 @@ public class AppController implements CanvasBorderedImage {
 
     @FXML
     private void handleOpenImage() {
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Open Image File");
-        fileChooser.getExtensionFilters().addAll(
-                new ExtensionFilter("Image Files", Utility.ACCEPTED_EXTENSIONS.stream().map(ext -> "*" + ext).toArray(String[]::new)),
-                new ExtensionFilter("Raw Files", Utility.RAW_EXTENSIONS.stream().map(ext -> "*" + ext).toArray(String[]::new)),
-                new ExtensionFilter("All Files", "*.*"));
-        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Immagini",
-                String.join(", *", Utility.ACCEPTED_EXTENSIONS)));
-        file = fileChooser.showOpenDialog(null);
+        File file = Utility.openFileChooser();
 
         if (file != null) {
-            originalImage = loadImage(file);
+            originalImage = Utility.loadImage(file);
             imageView.setImage(originalImage);
             currentBorderOffset = 0;
             borderedImage = null;
@@ -148,38 +140,6 @@ public class AppController implements CanvasBorderedImage {
     @FXML
     private void handleExit() {
         javafx.application.Platform.exit();
-    }
-
-    /**
-     * Carica un'immagine da file, supportando anche il formato TIFF (non gestito nativamente
-     * da JavaFX) tramite ImageIO e conversione con {@link SwingFXUtils#toFXImage}. Per gli altri
-     * formati (JPG, GIF, PNG, ...) usa direttamente il costruttore di {@link Image}.
-     */
-    private Image loadImage(File file) {
-        String name = file.getName().toLowerCase(java.util.Locale.ROOT);
-        // raw
-        if (Utility.RAW_EXTENSIONS.stream().anyMatch(name::endsWith)) {
-            try {
-                java.awt.image.BufferedImage bufferedImage = RawImageReader.read(file);
-                return SwingFXUtils.toFXImage(bufferedImage, null);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            return null;
-        }
-        // tiff
-        if (name.endsWith(".tif") || name.endsWith(".tiff")) {
-            try {
-                java.awt.image.BufferedImage bufferedImage = ImageIO.read(file);
-                if (bufferedImage != null) {
-                    return SwingFXUtils.toFXImage(bufferedImage, null);
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            return null;
-        }
-        return new Image(file.toURI().toString());
     }
 
     @FXML
