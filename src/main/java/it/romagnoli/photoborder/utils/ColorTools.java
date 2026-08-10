@@ -1,6 +1,16 @@
 package it.romagnoli.photoborder.utils;
 
+import java.io.File;
+import java.io.IOException;
+
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+
 import javafx.scene.control.Label;
+import javafx.scene.image.Image;
+import javafx.scene.image.PixelReader;
+import javafx.scene.image.PixelWriter;
+import javafx.scene.image.WritableImage;
 import javafx.scene.paint.Color;
 
 public class ColorTools {
@@ -180,5 +190,62 @@ public class ColorTools {
         double a = lab[1];
         double b = lab[2];
         return b < 0 && a >= -5 && a <= 3;
+    }
+
+    /**
+     * Converte un'immagine JavaFX in scala di grigi.
+     * @param image
+     * @return
+     * 
+     * @Usage Image img1 = convertToGrayScale(new Image(filepath);
+                    imageView.setImage(img1);
+     */
+    public static Image convertToGrayScale(Image image) {
+        WritableImage result = new WritableImage((int) image.getWidth(), (int) image.getHeight());
+        PixelReader preader = image.getPixelReader();
+        PixelWriter pwriter = result.getPixelWriter();
+            
+        for (int i = 0; i < result.getWidth(); i++) 
+            for (int j = 0; j < result.getHeight(); j++)
+                pwriter.setColor(i , j, preader.getColor(i, j).grayscale());
+        return result;  
+    }
+
+
+    private void saveBadImage(BufferedImage originalImage, File dest) throws IOException
+    {
+        // use the following line if you want the first parameter to be a filepath to src image instead of Image itself
+        //BufferedImage originalImage = ImageIO.read(file);
+
+        // jpg needs BufferedImage.TYPE_INT_RGB
+        // png needs BufferedImage.TYPE_INT_ARGB
+
+        if (dest.getName().toLowerCase().endsWith(".png")) {
+            // create a blank, RGPNGB, same width and height
+            BufferedImage newBufferedImage = new BufferedImage(
+                    originalImage.getWidth(),
+                    originalImage.getHeight(),
+                    BufferedImage.TYPE_INT_ARGB);
+
+            // draw a white background and puts the originalImage on it.
+            newBufferedImage.createGraphics().drawImage(originalImage,0,0,null);
+
+            // save an image
+            ImageIO.write(newBufferedImage, "png", dest);
+        } else if (dest.getName().toLowerCase().endsWith(".jpg") || dest.getName().toLowerCase().endsWith(".jpeg")) {
+            // create a blank, RGB, same width and height
+            BufferedImage newBufferedImage = new BufferedImage(
+                    originalImage.getWidth(),
+                    originalImage.getHeight(),
+                    BufferedImage.TYPE_INT_RGB);
+
+            // draw a white background and puts the originalImage on it.
+            newBufferedImage.createGraphics().drawImage(originalImage,0,0,null);
+
+            // save an image
+            ImageIO.write(newBufferedImage, "jpg", dest);
+        } else {
+                throw new IOException("Formato di file non supportato: " + dest.getName());
+        }
     }
 }
