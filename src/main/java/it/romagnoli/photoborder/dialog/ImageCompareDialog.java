@@ -15,6 +15,9 @@ import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
+import javafx.scene.control.Menu;
+import javafx.scene.control.MenuBar;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.image.Image;
@@ -64,7 +67,7 @@ public class ImageCompareDialog {
     private final GridView<CompareSample> gridView = new GridView<>();
     private final ObservableList<CompareSample> samples = FXCollections.observableArrayList();
 
-    private final ImageView previewView = new ImageView();
+    private final ImageView imageView = new ImageView();
     private final Canvas markerCanvas = new Canvas();
     private final ToggleButton image1Toggle = new ToggleButton();
     private final ToggleButton image2Toggle = new ToggleButton();
@@ -91,7 +94,7 @@ public class ImageCompareDialog {
         gridView.setMaxWidth(Double.MAX_VALUE);
         gridView.setMaxHeight(Double.MAX_VALUE);
 
-        previewView.setPreserveRatio(true);
+        imageView.setPreserveRatio(true);
 
         ToggleGroup toggleGroup = new ToggleGroup();
         image1Toggle.setToggleGroup(toggleGroup);
@@ -103,14 +106,14 @@ public class ImageCompareDialog {
 
         image1Toggle.setOnAction(e -> {
             if (image1Toggle.isSelected()) {
-                previewView.setImage(image1);
+                imageView.setImage(image1);
                 selectedImage.set(1);
                 drawMarkers();
             }
         });
         image2Toggle.setOnAction(e -> {
             if (image2Toggle.isSelected()) {
-                previewView.setImage(image2);
+                imageView.setImage(image2);
                 selectedImage.set(2);
                 drawMarkers();
             }
@@ -130,9 +133,9 @@ public class ImageCompareDialog {
                 fileName1 = file.getName();
                 image1Toggle.setGraphic(createThumbnail(img));
                 image1Toggle.setText(fileName1);
-                previewView.setImage(image1);
+                imageView.setImage(image1);
                 selectedImage.set(1);
-                updateColors();
+                updateColors(null);
                 System.out.println("Immagine 1 selezionata: " + fileName1);
             }
         } else {
@@ -147,9 +150,9 @@ public class ImageCompareDialog {
                 fileName2 = file.getName();
                 image2Toggle.setGraphic(createThumbnail(img));
                 image2Toggle.setText(fileName2);
-                previewView.setImage(image2);
+                imageView.setImage(image2);
                 selectedImage.set(2);
-                updateColors();
+                updateColors(null);
                 System.out.println("Immagine 2 selezionata: " + fileName2);
             }
         } else {
@@ -177,6 +180,8 @@ public class ImageCompareDialog {
             dialog.setResizable(true);
             dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
 
+            MenuBar menuBar = createMenuBar();
+
             Button closeButton =
                     (Button) dialog.getDialogPane()
                             .lookupButton(ButtonType.CLOSE);
@@ -189,12 +194,12 @@ public class ImageCompareDialog {
             HBox thumbsBox = new HBox(8, image1Toggle, image2Toggle);
             thumbsBox.setAlignment(Pos.CENTER_LEFT);
 
-            VBox leftBox = new VBox(10, thumbsBox, gridView);
+            VBox leftBox = new VBox(10, menuBar, thumbsBox, gridView);
             leftBox.setAlignment(Pos.TOP_LEFT);
             VBox.setVgrow(gridView, Priority.ALWAYS);
             gridView.prefWidthProperty().bind(leftBox.widthProperty());
 
-            StackPane previewBox = new StackPane(previewView, markerCanvas);
+            StackPane previewBox = new StackPane(imageView, markerCanvas);
             previewBox.setAlignment(Pos.CENTER);
             previewBox.setMinSize(0, 0);
             previewBox.setPrefSize(0, 0);
@@ -214,10 +219,10 @@ public class ImageCompareDialog {
 
             // L'ImageView viene ridimensionato automaticamente nello spazio
             // disponibile, mantenendo il rapporto originale dell'immagine.
-            previewView.setPreserveRatio(true);
-            previewView.setSmooth(true);
-            previewView.fitWidthProperty().bind(previewBox.widthProperty());
-            previewView.fitHeightProperty().bind(previewBox.heightProperty());
+            imageView.setPreserveRatio(true);
+            imageView.setSmooth(true);
+            imageView.fitWidthProperty().bind(previewBox.widthProperty());
+            imageView.fitHeightProperty().bind(previewBox.heightProperty());
 
             // Il canvas segue esattamente le dimensioni dell'area di anteprima.
             markerCanvas.widthProperty().bind(previewBox.widthProperty());
@@ -231,8 +236,30 @@ public class ImageCompareDialog {
             dialog.getDialogPane().setPrefSize(1150, 860);
         }
 
-        updateColors();
+        updateColors(null);
         dialog.show();
+    }
+
+    /** Crea la barra dei menu */
+    private MenuBar createMenuBar() {
+        // 1. Crea la singola voce del menu
+        MenuItem schemaPointsItem = new MenuItem("Leggi schema punti");
+        schemaPointsItem.setOnAction(event -> leggiSchemaPunti());
+
+        // 2. Crea il menu principale assegnando un titolo visibile (es. "File")
+        Menu menuFile = new Menu("File", null, schemaPointsItem);
+
+        // 3. Aggiungi il menu alla barra
+        MenuBar menuBar = new MenuBar();
+        menuBar.getMenus().add(menuFile);
+
+        return menuBar;
+    }
+
+    private void leggiSchemaPunti() {
+        List<Point2D> points = Utility.leggiSchemaPunti(imageView);
+        updateColors(points);
+        drawMarkers();
     }
 
     public boolean isShowing() {
@@ -252,7 +279,7 @@ public class ImageCompareDialog {
 
         samples.clear();
 
-        previewView.setImage(null);
+        imageView.setImage(null);
 
         markerCanvas.getGraphicsContext2D().clearRect(
                 0,
@@ -297,7 +324,7 @@ public class ImageCompareDialog {
         return points;
     }
 
-    private void updateColors() {
+    private void updateColors(List<Point2D> points) {
         if (image1 == null || image2 == null) {
             return;
         }
@@ -307,8 +334,13 @@ public class ImageCompareDialog {
         double w2 = image2.getWidth();
         double h2 = image2.getHeight();
 
-        points1 = computeSamplePoints(w1, h1);
-        points2 = computeSamplePoints(w2, h2);
+        if (points == null || points.isEmpty()) {
+            points1 = computeSamplePoints(w1, h1);
+            points2 = computeSamplePoints(w2, h2);
+        } else {
+            points1 = points;
+            points2 = points;
+        }
         PixelReader reader1 = image1.getPixelReader();
         PixelReader reader2 = image2.getPixelReader();
 
@@ -337,7 +369,7 @@ public class ImageCompareDialog {
         GraphicsContext gc = markerCanvas.getGraphicsContext2D();
         gc.clearRect(0, 0, markerCanvas.getWidth(), markerCanvas.getHeight());
 
-        Image displayedImage = previewView.getImage();
+        Image displayedImage = imageView.getImage();
         List<Point2D> points = selectedImage.get() == 1 ? points1 : points2;
         if (displayedImage == null || points.isEmpty()) {
             return;

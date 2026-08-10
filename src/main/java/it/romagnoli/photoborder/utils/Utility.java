@@ -66,7 +66,7 @@ public class Utility {
     	}
     }
 
-    public static List < Point2D > leggiSchemaPunti(ImageView previewView, IntegerProperty selectedImage) {
+    public static List < Point2D > leggiSchemaPunti(ImageView previewView) {
 		FileChooser fileChooser = new FileChooser();
         fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Points Schema", "*.csv"));
         File csvFile = fileChooser.showOpenDialog(null);

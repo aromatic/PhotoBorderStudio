@@ -38,7 +38,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import java.util.concurrent.CancellationException;
 
 import javafx.collections.ObservableSet;
 
@@ -217,7 +216,7 @@ public class ColorAnalysisDialog {
 
             loadPointsButton.setOnAction(
                     e -> {
-                        colorSamplePoints = Utility.leggiSchemaPunti(canvasBorderedImage.getImageView(), selectedIndex);
+                        colorSamplePoints = Utility.leggiSchemaPunti(canvasBorderedImage.getImageView());
                         updateColors(canvasBorderedImage.getImageView().getImage(), colorSamplePoints);
                         drawColorMarkers(canvasBorderedImage.getMarkerCanvas(), canvasBorderedImage.getCurrentBorderOffset());
                     }
