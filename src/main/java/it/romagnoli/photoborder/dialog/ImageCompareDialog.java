@@ -30,6 +30,7 @@ import javafx.stage.Window;
 import javafx.stage.FileChooser;
 import javafx.stage.FileChooser.ExtensionFilter;
 import it.romagnoli.photoborder.raw.RawImageReader;
+import it.romagnoli.photoborder.utils.ColorTools;
 import it.romagnoli.photoborder.utils.Utility;
 
 import org.controlsfx.control.GridCell;
@@ -272,15 +273,6 @@ public class ImageCompareDialog {
         selectedImage.set(1);
     }
 
-    private static final List<String> RAW_EXTENSIONS = List.of(
-            ".cr2", ".nef", ".arw", ".dng", ".raf", ".orf", ".rw2",
-            ".CR2", ".NEF", ".ARW", ".DNG", ".RAF", ".ORF", ".RW2");
-
-    private static final List<String> ACCEPTED_EXTENSIONS = List.of(
-            ".jpg", ".jpeg", ".gif", ".tif", ".tiff",
-            ".cr2", ".nef", ".arw", ".dng", ".raf", ".orf", ".rw2");
-
-
     private static ImageView createThumbnail(Image image) {
         ImageView view = new ImageView(image);
 
@@ -435,6 +427,7 @@ public class ImageCompareDialog {
         private final Label labLabel1 = new Label();
         private final Label rgbLabel2 = new Label();
         private final Label labLabel2 = new Label();
+        private final Label diffColor = new Label();
         private final HBox root = new HBox(10);
         private final SimpleIntegerProperty selectedImage;
 
@@ -458,7 +451,7 @@ public class ImageCompareDialog {
             labelsBox2.setAlignment(Pos.CENTER_LEFT);
 
             root.setAlignment(Pos.CENTER_LEFT);
-            root.getChildren().addAll(swatch1, labelsBox1, swatch2, labelsBox2);
+            root.getChildren().addAll(swatch1, labelsBox1, swatch2, labelsBox2, diffColor);
             setGraphic(root);
 
             updateLabelStyles();
@@ -509,6 +502,8 @@ public class ImageCompareDialog {
             rgbLabel2.setText(String.format("RGB: %d, %d, %d", r2, g2, b2));
             double[] lab2 = rgbToLab(sample.color2);
             labLabel2.setText(String.format(Locale.ITALIAN, "Lab: %.1f, %.1f, %.1f", lab2[0], lab2[1], lab2[2]));
+
+            ColorTools.calcolaDifferenzaColori(sample.color1, sample.color2, diffColor);
         }
 
         @Override

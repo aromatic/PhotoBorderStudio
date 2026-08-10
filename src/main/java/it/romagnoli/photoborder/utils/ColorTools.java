@@ -1,5 +1,6 @@
 package it.romagnoli.photoborder.utils;
 
+import javafx.scene.control.Label;
 import javafx.scene.paint.Color;
 
 public class ColorTools {
@@ -34,7 +35,49 @@ public class ColorTools {
         return new double[] { l, a, bLab };
     }  
 
+/**
+     * Calcola il Delta E (CIE76) tra due colori JavaFX e aggiorna la Label.
+     *
+     * @param c1 Primo colore
+     * @param c2 Secondo colore
+     * @param labelEtichetta La Label JavaFX da aggiornare e colorare
+     */
+    public static void calcolaDifferenzaColori(Color c1, Color c2, Label labelEtichetta) {
+        // 1. Converti i due colori JavaFX da RGB a LAB
+        double[] lab1 = rgbToLab(c1);
+        double[] lab2 = rgbToLab(c2);
 
+        // 2. Calcola la distanza Euclidea Delta E 1976
+        double deltaE = Math.sqrt(
+            Math.pow(lab1[0] - lab2[0], 2) +
+            Math.pow(lab1[1] - lab2[1], 2) +
+            Math.pow(lab1[2] - lab2[2], 2)
+        );
+
+        // 3. Determina lo stile visivo in base alle soglie di percezione
+        String textColor;
+        String backgroundColor = "#FFFFFF"; // Testo bianco di default
+
+        if (deltaE <= 1.0) {
+            textColor = "#2ecc71"; // Verde (Impercettibile)
+        } else if (deltaE <= 2.0) {
+            textColor = "#f1c40f"; // Giallo (Differenza minima)
+        } else if (deltaE <= 10.0) {
+            textColor = "#e67e22"; // Arancione (Percepibile)
+        } else {
+            textColor = "#e74c3c"; // Rosso (Molto diversa)
+        }
+
+        // 4. Aggiorna il testo e lo stile della Label
+        labelEtichetta.setText(String.format("ΔE: %.2f", deltaE));
+        labelEtichetta.setStyle(
+            "-fx-background-color: " + backgroundColor + ";" +
+            "-fx-text-fill: " + textColor + ";" +
+            "-fx-padding: 8px 12px;" +
+            "-fx-background-radius: 4px;" +
+            "-fx-font-weight: bold;"
+        );
+    }
 
 
     public static double pivotRgb(double channel) {
