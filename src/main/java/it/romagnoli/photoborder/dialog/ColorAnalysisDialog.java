@@ -7,6 +7,8 @@ import javafx.geometry.Point2D;
 import javafx.geometry.Pos;
 import javafx.beans.property.ReadOnlyIntegerProperty;
 import javafx.beans.property.SimpleIntegerProperty;
+import javafx.scene.canvas.Canvas;
+import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
@@ -25,8 +27,8 @@ import javafx.scene.paint.Color;
 import org.controlsfx.control.GridCell;
 import org.controlsfx.control.GridView;
 
+import it.romagnoli.photoborder.utils.CanvasBorderedImage;
 import it.romagnoli.photoborder.utils.ColorTools;
-import it.romagnoli.photoborder.utils.MarkerPoints;
 import it.romagnoli.photoborder.utils.PointTools;
 import it.romagnoli.photoborder.utils.Utility;
 
@@ -36,10 +38,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
+
 import javafx.collections.ObservableSet;
 
 import java.io.File;
-import javafx.scene.image.ImageView;
 
 
 /**
@@ -74,10 +77,10 @@ public class ColorAnalysisDialog {
     private Runnable onReset;
     private Runnable onSkinToneCheckChanged;
 
-    private List<Point2D> points;
-    private File currentImageFile;
-    private ImageView imageView;
-    private MarkerPoints markerPoints;
+    private List<Point2D> colorSamplePoints = List.of(); // punti (coord. immagine originale) marcati sulla preview
+
+    private File schemaPointsFile; // file CSV associato all'immagine corrente, dove salvare/leggere i punti campionati
+    private CanvasBorderedImage canvasBorderedImage;
 
     public ColorAnalysisDialog() { 
         gridView.setItems(samples);
@@ -96,24 +99,27 @@ public class ColorAnalysisDialog {
         skinToneWarningLabel.setStyle("-fx-text-fill: red; -fx-font-weight: bold;");
         skinToneWarningLabel.setVisible(false);
         skinToneWarningLabel.setManaged(false);
+    }
+   
 
-       
+    public List<Point2D> getColorSamplePoints() {
+        return colorSamplePoints;
     }
 
-    public void setMarkerPoints(MarkerPoints markerPoints) {
-        this.markerPoints = markerPoints;
-    }
-
-    public void setImageView(ImageView imageView) {
-        this.imageView = imageView;
+    public void setColorSamplePoints(List<Point2D> colorSamplePoints) {
+        this.colorSamplePoints = colorSamplePoints;
     }
     
+    public void setCanvasBorderedImage(CanvasBorderedImage canvasBorderedImage) {
+        this.canvasBorderedImage = canvasBorderedImage;
+    }
+
     public void setCurrentImageFile(File file) {
          if (file != null) {
             String fileName = file.getName();
             int dotIndex = fileName.lastIndexOf('.');
             String nameWithoutExt = (dotIndex == -1) ? fileName : fileName.substring(0, dotIndex);
-            this.currentImageFile = new File(file.getParentFile(), nameWithoutExt + "_ptx.csv");
+            this.schemaPointsFile = new File(file.getParentFile(), nameWithoutExt + "_ptx.csv");
         }
     }
 
@@ -204,16 +210,16 @@ public class ColorAnalysisDialog {
             Button savePointsButton = new Button("Salva punti");
 
             savePointsButton.setOnAction(
-                    e -> Utility.salvaSchemaPunti(currentImageFile, imageView, points)
+                    e -> Utility.salvaSchemaPunti(schemaPointsFile, canvasBorderedImage.getImageView(), colorSamplePoints)
             );
 
             Button loadPointsButton = new Button("Leggi schema punti");
 
             loadPointsButton.setOnAction(
                     e -> {
-                        points = Utility.leggiSchemaPunti(imageView, selectedIndex);
-                        updateColors(imageView.getImage(), points);
-                        markerPoints.drawColorMarkers();
+                        colorSamplePoints = Utility.leggiSchemaPunti(canvasBorderedImage.getImageView(), selectedIndex);
+                        updateColors(canvasBorderedImage.getImageView().getImage(), colorSamplePoints);
+                        drawColorMarkers(canvasBorderedImage.getMarkerCanvas(), canvasBorderedImage.getCurrentBorderOffset());
                     }
             );
 
@@ -392,13 +398,73 @@ public class ColorAnalysisDialog {
      * intersezioni della regola dei terzi, ordinati per righe (alto-sinistra -> basso-destra).
      */
     public List<Point2D> computeSamplePoints(double width, double height) {
-        points = new ArrayList<>(ROWS * COLS);
+        colorSamplePoints = new ArrayList<>(ROWS * COLS);
         for (double fy : FRACTIONS) {
             for (double fx : FRACTIONS) {
-                points.add(new Point2D(width * fx, height * fy));
+                colorSamplePoints.add(new Point2D(width * fx, height * fy));
             }
         }
-        return points;
+        return colorSamplePoints;
+    }
+
+
+    /**
+     * Disegna dei cerchietti rossi sull'overlay in corrispondenza dei punti della
+     * regola dei terzi, senza alterare in alcun modo l'immagine sottostante.
+     */
+    public void drawColorMarkers(Canvas markerCanvas, int currentBorderOffset) {
+        if (canvasBorderedImage == null) {
+            return;
+        }
+        GraphicsContext gc = markerCanvas.getGraphicsContext2D();
+        gc.clearRect(0, 0, markerCanvas.getWidth(), markerCanvas.getHeight());
+
+        Image displayedImage = canvasBorderedImage.getImageView().getImage();
+        if (!isShowing() || displayedImage == null || getColorSamplePoints().isEmpty()) {
+            return;
+        }
+
+        double imgWidth = displayedImage.getWidth();
+        double imgHeight = displayedImage.getHeight();
+        double canvasWidth = markerCanvas.getWidth();
+        double canvasHeight = markerCanvas.getHeight();
+        if (imgWidth <= 0 || imgHeight <= 0 || canvasWidth <= 0 || canvasHeight <= 0) {
+            return;
+        }
+
+        double scale = Math.min(canvasWidth / imgWidth, canvasHeight / imgHeight);
+        double displayedWidth = imgWidth * scale;
+        double displayedHeight = imgHeight * scale;
+        double offsetX = (canvasWidth - displayedWidth) / 2;
+        double offsetY = (canvasHeight - displayedHeight) / 2;
+
+        double radius = 6;
+        gc.setLineWidth(2);
+
+        int selectedIndex = getSelectedIndex();
+        if (selectedIndex >= 0 && selectedIndex < getColorSamplePoints().size()) {
+            // Una cella è selezionata: mostra solo il marker di riferimento di quel colore
+            drawSingleMarker(gc, getColorSamplePoints().get(selectedIndex), selectedIndex, scale, currentBorderOffset, offsetX, offsetY, radius);
+        } else {
+            for (int i = 0; i < getColorSamplePoints().size(); i++) {
+                drawSingleMarker(gc, getColorSamplePoints().get(i), i, scale, currentBorderOffset, offsetX, offsetY, radius);
+            }
+        }
+    }
+
+    /** Disegna un singolo cerchietto (in coordinate immagine originale) sull'overlay: verde se il
+     * colore rispetta il criterio dei toni incarnato (dopo la verifica), rosso altrimenti. */
+    private void drawSingleMarker(GraphicsContext gc, Point2D point, int index, double scale, int currentBorderOffset,
+                                   double offsetX, double offsetY, double radius) {
+        boolean isValid = isSkinToneChecked() && !isInvalidSkinTone(index);
+        gc.setStroke(isValid ? Color.GREEN : Color.RED);
+        // Sposta il punto (in coordinate immagine originale) nelle coordinate
+        // dell'immagine effettivamente mostrata, tenendo conto dei bordi aggiunti.
+        double cx = offsetX + (point.getX() + currentBorderOffset) * scale;
+        double cy = offsetY + (point.getY() + currentBorderOffset) * scale;
+        gc.strokeOval(cx - radius, cy - radius, radius * 2, radius * 2);
+        if (index == 0) 
+            System.out.println("Disegnato marker: index=" + index + ", cx=" + cx + ", cy=" + cy + ", radius=" + radius);    
     }
 
     /**
@@ -424,21 +490,21 @@ public class ColorAnalysisDialog {
 
         double width = image.getWidth();
         double height = image.getHeight();
-        points = newPoints != null ? newPoints : computeSamplePoints(width, height);
+        colorSamplePoints = newPoints != null ? newPoints : computeSamplePoints(width, height);
         PixelReader reader = image.getPixelReader();
 
-        List<ColorSample> newSamples = new ArrayList<>(points.size());
-        for (Point2D p : points) {
+        List<ColorSample> newSamples = new ArrayList<>(colorSamplePoints.size());
+        for (Point2D p : colorSamplePoints) {
             int x = PointTools.clamp((int) Math.round(p.getX()), 0, (int) width - 1);
             int y = PointTools.clamp((int) Math.round(p.getY()), 0, (int) height - 1);
             newSamples.add(new ColorSample(p, reader.getColor(x, y)));
         }
 
         samples.setAll(newSamples);
-        infoLabel.setText("Calc: (" + java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")) + ")");
-        return points;
+        infoLabel.setText("(" + (int) width + ", " + (int) height  + ") : " + 
+            java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")));
+        return colorSamplePoints;
     }
-
 
     /**
      * Dati associati a una cella: il punto campionato (coordinate pixel immagine originale)

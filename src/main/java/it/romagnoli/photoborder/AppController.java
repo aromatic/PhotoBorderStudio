@@ -23,7 +23,7 @@ import javafx.stage.FileChooser;
 import javafx.stage.FileChooser.ExtensionFilter;
 
 import it.romagnoli.photoborder.raw.RawImageReader;
-import it.romagnoli.photoborder.utils.MarkerPoints;
+import it.romagnoli.photoborder.utils.CanvasBorderedImage;
 import it.romagnoli.photoborder.utils.PointTools;
 import it.romagnoli.photoborder.utils.Utility;
 
@@ -33,7 +33,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-public class AppController implements MarkerPoints {
+public class AppController implements CanvasBorderedImage {
 
     @FXML
     private ImageView imageView;
@@ -55,7 +55,7 @@ public class AppController implements MarkerPoints {
 
     private Image originalImage;
     private WritableImage borderedImage; // immagine con i bordi, usata anche per il salvataggio
-    private List<Point2D> colorSamplePoints = List.of(); // punti (coord. immagine originale) marcati sulla preview
+
     private int currentBorderOffset = 0; // whiteBorderSize + blackBorderSize applicati all'ultima renderizzazione
 
     @FXML
@@ -84,20 +84,19 @@ public class AppController implements MarkerPoints {
         // Il canvas dei marker segue sempre le dimensioni dell'area immagine
         markerCanvas.widthProperty().bind(imageView.fitWidthProperty());
         markerCanvas.heightProperty().bind(imageView.fitHeightProperty());
-        markerCanvas.widthProperty().addListener((obs, oldVal, newVal) -> drawColorMarkers());
-        markerCanvas.heightProperty().addListener((obs, oldVal, newVal) -> drawColorMarkers());
+        markerCanvas.widthProperty().addListener((obs, oldVal, newVal) -> colorAnalysisDialog.drawColorMarkers(markerCanvas, currentBorderOffset));
+        markerCanvas.heightProperty().addListener((obs, oldVal, newVal) -> colorAnalysisDialog.drawColorMarkers(markerCanvas, currentBorderOffset));
 
         // Rimuove i marker quando il dialog colori viene chiuso
-        colorAnalysisDialog.setOnClose(this::drawColorMarkers);
-
+        colorAnalysisDialog.setOnClose(() -> colorAnalysisDialog.drawColorMarkers(markerCanvas, currentBorderOffset));  
         // Quando si seleziona/deseleziona una cella colorata, mostra solo il marker corrispondente
-        colorAnalysisDialog.selectedIndexProperty().addListener((obs, oldVal, newVal) -> drawColorMarkers());
+        colorAnalysisDialog.selectedIndexProperty().addListener((obs, oldVal, newVal) -> colorAnalysisDialog.drawColorMarkers(markerCanvas, currentBorderOffset));
 
         // Bottone Reset nel dialog colori: ricampiona e ricentra i marker, azzerando la verifica
         colorAnalysisDialog.setOnReset(this::refreshColorAnalysis);
 
         // Dopo la verifica "Toni incarnato", ridisegna i marker colorandoli in verde/rosso
-        colorAnalysisDialog.setOnSkinToneCheckChanged(this::drawColorMarkers);
+        colorAnalysisDialog.setOnSkinToneCheckChanged(() -> colorAnalysisDialog.drawColorMarkers(markerCanvas, currentBorderOffset));
 
         // Click sull'immagine: se una cella è selezionata, ricampiona colore e punto in quella posizione
         imageView.setOnMouseClicked(this::handleImageClicked);
@@ -107,7 +106,7 @@ public class AppController implements MarkerPoints {
         imageView.setOnMouseExited(event -> colorAnalysisDialog.setHoveredIndex(-1));
 
         // Listener per il salvataggio immagine
-        saveMenuItem.setOnAction(event -> saveImageWithBorders());
+        saveMenuItem.setOnAction(event -> Utility.saveImageWithBorders(borderedImage, imageView.getScene().getWindow()));
     }
 
     private void updateBorders() {
@@ -137,9 +136,8 @@ public class AppController implements MarkerPoints {
             histogramDialog.updateImage(originalImage);
             hueSaturationDialog.updateImage(originalImage);
 
-            colorAnalysisDialog.setImageView(imageView);
+            colorAnalysisDialog.setCanvasBorderedImage(this);
             colorAnalysisDialog.setCurrentImageFile(file);
-            colorAnalysisDialog.setMarkerPoints(this);
 
             if (colorAnalysisDialog.isShowing()) {
                 refreshColorAnalysis();
@@ -219,72 +217,18 @@ public class AppController implements MarkerPoints {
 
     /** Ricalcola i colori campionati dall'immagine e ridisegna i marker in overlay. */
     private void refreshColorAnalysis() {
-        colorSamplePoints = colorAnalysisDialog.updateColors(originalImage, null);
-        System.out.println("RICALCOLO  E RIDISEGNO points="+colorSamplePoints);
-        drawColorMarkers();
+        colorAnalysisDialog.updateColors(originalImage, null);
+        System.out.println("RICALCOLO  E RIDISEGNO points="+colorAnalysisDialog.getColorSamplePoints());
+        colorAnalysisDialog.drawColorMarkers(markerCanvas, currentBorderOffset);
     }
 
-    /**
-     * Disegna dei cerchietti rossi sull'overlay in corrispondenza dei punti della
-     * regola dei terzi, senza alterare in alcun modo l'immagine sottostante.
-     */
-    public void drawColorMarkers() {
-        GraphicsContext gc = markerCanvas.getGraphicsContext2D();
-        gc.clearRect(0, 0, markerCanvas.getWidth(), markerCanvas.getHeight());
-
-        Image displayedImage = imageView.getImage();
-        if (!colorAnalysisDialog.isShowing() || displayedImage == null || colorSamplePoints.isEmpty()) {
-            return;
-        }
-
-        double imgWidth = displayedImage.getWidth();
-        double imgHeight = displayedImage.getHeight();
-        double canvasWidth = markerCanvas.getWidth();
-        double canvasHeight = markerCanvas.getHeight();
-        if (imgWidth <= 0 || imgHeight <= 0 || canvasWidth <= 0 || canvasHeight <= 0) {
-            return;
-        }
-
-        double scale = Math.min(canvasWidth / imgWidth, canvasHeight / imgHeight);
-        double displayedWidth = imgWidth * scale;
-        double displayedHeight = imgHeight * scale;
-        double offsetX = (canvasWidth - displayedWidth) / 2;
-        double offsetY = (canvasHeight - displayedHeight) / 2;
-
-        double radius = 6;
-        gc.setLineWidth(2);
-
-        int selectedIndex = colorAnalysisDialog.getSelectedIndex();
-        if (selectedIndex >= 0 && selectedIndex < colorSamplePoints.size()) {
-            // Una cella è selezionata: mostra solo il marker di riferimento di quel colore
-            drawSingleMarker(gc, colorSamplePoints.get(selectedIndex), selectedIndex, scale, offsetX, offsetY, radius);
-        } else {
-            for (int i = 0; i < colorSamplePoints.size(); i++) {
-                drawSingleMarker(gc, colorSamplePoints.get(i), i, scale, offsetX, offsetY, radius);
-            }
-        }
-    }
-
-    /** Disegna un singolo cerchietto (in coordinate immagine originale) sull'overlay: verde se il
-     * colore rispetta il criterio dei toni incarnato (dopo la verifica), rosso altrimenti. */
-    private void drawSingleMarker(GraphicsContext gc, Point2D point, int index, double scale,
-                                   double offsetX, double offsetY, double radius) {
-        boolean isValid = colorAnalysisDialog.isSkinToneChecked() && !colorAnalysisDialog.isInvalidSkinTone(index);
-        gc.setStroke(isValid ? Color.GREEN : Color.RED);
-        // Sposta il punto (in coordinate immagine originale) nelle coordinate
-        // dell'immagine effettivamente mostrata, tenendo conto dei bordi aggiunti.
-        double cx = offsetX + (point.getX() + currentBorderOffset) * scale;
-        double cy = offsetY + (point.getY() + currentBorderOffset) * scale;
-        gc.strokeOval(cx - radius, cy - radius, radius * 2, radius * 2);
-        System.out.println("Disegnato marker: index=" + index + ", cx=" + cx + ", cy=" + cy + ", radius=" + radius);    
-    }
 
     /**
      * Gestisce il movimento del mouse sull'immagine: se il cursore si trova sopra uno dei
      * cerchietti attualmente visibili, evidenzia (hover) la cella corrispondente nel dialog.
      */
     private void handleImageMouseMoved(MouseEvent event) {
-        if (!colorAnalysisDialog.isShowing() || colorSamplePoints.isEmpty()) {
+        if (!colorAnalysisDialog.isShowing() || colorAnalysisDialog.getColorSamplePoints().isEmpty()) {
             colorAnalysisDialog.setHoveredIndex(-1);
             return;
         }
@@ -299,15 +243,15 @@ public class AppController implements MarkerPoints {
         int hovered = -1;
         int selectedIndex = colorAnalysisDialog.getSelectedIndex();
 
-        if (selectedIndex >= 0 && selectedIndex < colorSamplePoints.size()) {
+        if (selectedIndex >= 0 && selectedIndex < colorAnalysisDialog.getColorSamplePoints().size()) {
             // Solo il marker selezionato è visibile: considera solo quello per l'hover
-            Point2D local = PointTools.toImageViewLocalCoordinates(colorSamplePoints.get(selectedIndex), scale, currentBorderOffset);
+            Point2D local = PointTools.toImageViewLocalCoordinates(colorAnalysisDialog.getColorSamplePoints().get(selectedIndex), scale, currentBorderOffset);
             if (Math.hypot(local.getX() - event.getX(), local.getY() - event.getY()) <= hitRadius) {
                 hovered = selectedIndex;
             }
         } else {
-            for (int i = 0; i < colorSamplePoints.size(); i++) {
-                Point2D local = PointTools.toImageViewLocalCoordinates(colorSamplePoints.get(i), scale, currentBorderOffset);
+            for (int i = 0; i < colorAnalysisDialog.getColorSamplePoints().size(); i++) {
+                Point2D local = PointTools.toImageViewLocalCoordinates(colorAnalysisDialog.getColorSamplePoints().get(i), scale, currentBorderOffset);
                 if (Math.hypot(local.getX() - event.getX(), local.getY() - event.getY()) <= hitRadius) {
                     hovered = i;
                     break;
@@ -350,7 +294,7 @@ public class AppController implements MarkerPoints {
         }
 
         int selectedIndex = colorAnalysisDialog.getSelectedIndex();
-        if (selectedIndex < 0 || selectedIndex >= colorSamplePoints.size()) {
+        if (selectedIndex < 0 || selectedIndex >= colorAnalysisDialog.getColorSamplePoints().size()) {
             return;
         }
 
@@ -385,12 +329,12 @@ public class AppController implements MarkerPoints {
         PixelReader reader = originalImage.getPixelReader();
         Color newColor = reader.getColor(px, py);
 
-        List<Point2D> updatedPoints = new ArrayList<>(colorSamplePoints);
+        List<Point2D> updatedPoints = new ArrayList<>(colorAnalysisDialog.getColorSamplePoints());
         updatedPoints.set(selectedIndex, new Point2D(px, py));
-        colorSamplePoints = updatedPoints;
+        colorAnalysisDialog.setColorSamplePoints(updatedPoints);
 
         colorAnalysisDialog.updateSampleAt(selectedIndex, new Point2D(px, py), newColor);
-        drawColorMarkers();
+        colorAnalysisDialog.drawColorMarkers(markerCanvas, currentBorderOffset);
     }
 
     private void applyBorders(double whiteBorderPixels, double blackBorderPixels) {
@@ -481,28 +425,21 @@ public class AppController implements MarkerPoints {
             imageView.setImage(borderedImage);
 
             // Il bordo può essere cambiato: riallinea la posizione dei marker sull'overlay
-            drawColorMarkers();
+            colorAnalysisDialog.drawColorMarkers(markerCanvas, currentBorderOffset);
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    private void saveImageWithBorders() {
-        if (borderedImage == null) {
-            return; // Nessuna immagine con bordi da salvare
-        }
 
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Immagini PNG", "*.png"));
-        File file = fileChooser.showSaveDialog(null);
-
-        if (file != null) {
-            try {
-                // Salva direttamente l'immagine con i bordi, senza passare da ImageView
-                ImageIO.write(SwingFXUtils.fromFXImage(borderedImage, null), "png", file);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
+    public Canvas getMarkerCanvas() {
+        return markerCanvas;
     }
+    public int getCurrentBorderOffset() {
+        return currentBorderOffset;
+    }
+    public ImageView getImageView() {
+        return imageView;
+    }   
+ 
 }

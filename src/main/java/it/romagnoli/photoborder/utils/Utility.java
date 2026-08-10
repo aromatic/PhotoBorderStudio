@@ -3,6 +3,9 @@ package it.romagnoli.photoborder.utils;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Locale;
+
+import javax.imageio.ImageIO;
+
 import java.io.File;
 import java.io.PrintWriter;
 import java.io.BufferedWriter;
@@ -14,6 +17,7 @@ import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.geometry.Point2D;
 import javafx.beans.property.IntegerProperty;
+import javafx.embed.swing.SwingFXUtils;
 import javafx.stage.FileChooser;
 import javafx.stage.FileChooser.ExtensionFilter;
 import javafx.stage.Window;
@@ -115,19 +119,11 @@ public class Utility {
     			System.out.println("Schema non valido: trovati " + savedPoints.size() + " punti invece di 9.");
     			return null;
     		}
-    		/*
-    		 * Dimensioni dell'immagine ATTUALMENTE caricata.
-    		 */
-    		double currentWidth = previewView.getImage().getWidth();
-    		double currentHeight = previewView.getImage().getHeight();
-    		/*
-    		 * Fattori di ridimensionamento.
-    		 */
-    		double scaleX = currentWidth / savedWidth;
-    		double scaleY = currentHeight / savedHeight;
+
     		List < Point2D > points = new ArrayList < > (9);
     		for(Point2D p: savedPoints) {
-    			points.add(new Point2D(p.getX() * scaleX, p.getY() * scaleY));
+				points.add(new Point2D(p.getX(), p.getY()));
+    			//points.add(new Point2D(p.getX() * scaleX, p.getY() * scaleY));
     		}
     		System.out.println("Schema punti caricato: " + csvFile.getAbsolutePath());
     		return points;
@@ -135,7 +131,27 @@ public class Utility {
     		e.printStackTrace();
     	}
         return null;
-    }     
-} 
+    }
+	
+	
+	public static void saveImageWithBorders(Image borderedImage, Window ownerWindow) {
+        if (borderedImage == null) {
+            return; // Nessuna immagine con bordi da salvare
+        }
+
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Immagini PNG", "*.png"));
+        File file = fileChooser.showSaveDialog(null);
+
+        if (file != null) {
+            try {
+                // Salva direttamente l'immagine con i bordi, senza passare da ImageViewB
+                ImageIO.write(SwingFXUtils.fromFXImage(borderedImage, null), "png", file);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+}
 
 
