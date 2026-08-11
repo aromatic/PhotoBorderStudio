@@ -4,6 +4,7 @@ import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
+import nu.pattern.OpenCV;
 
 import java.io.IOException;
 
@@ -19,6 +20,12 @@ public class App extends Application {
         stage.show();
     }
 
+    @Override
+    public void init() {
+        // Carica la libreria nativa automaticamente
+        OpenCV.loadLocally();
+    }
+    
     public static void main(String[] args) {
         launch();
     }

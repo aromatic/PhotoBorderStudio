@@ -1,5 +1,6 @@
 package it.romagnoli.photoborder;
 
+import it.romagnoli.photoborder.dialog.AlphaEditorDialog;
 import it.romagnoli.photoborder.dialog.BorderDialog;
 import it.romagnoli.photoborder.dialog.ColorAnalysisDialog;
 import it.romagnoli.photoborder.dialog.CopyrightDialog;
@@ -51,6 +52,7 @@ public class AppController implements CanvasBorderedImage {
     private final HistogramDialog histogramDialog = new HistogramDialog();
     private final HueSaturationDialog hueSaturationDialog = new HueSaturationDialog();
     private final ColorAnalysisDialog colorAnalysisDialog = new ColorAnalysisDialog();
+    private final AlphaEditorDialog alphaEditorDialog = new AlphaEditorDialog();
     private final ImageCompareDialog imageCompareDialog = new ImageCompareDialog();
 
     private Image originalImage;
@@ -173,6 +175,11 @@ public class AppController implements CanvasBorderedImage {
     @FXML
     private void handleShowCompareDialog() {
         imageCompareDialog.show();
+    }
+
+    @FXML
+    private void handleShowAlphaEditorDialog() {
+        alphaEditorDialog.show();
     }
 
     /** Ricalcola i colori campionati dall'immagine e ridisegna i marker in overlay. */

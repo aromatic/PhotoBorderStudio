@@ -21,6 +21,7 @@
                 <MenuItem text="Istogramma" onAction="#handleShowHistogramDialog"/>
                 <MenuItem text="Hue / Saturation" onAction="#handleShowHueSaturationDialog"/>
                 <MenuItem text="Analizza colori" onAction="#handleShowColorAnalysisDialog"/>
+                <MenuItem text="Regolazione Alpha" onAction="#handleShowAlphaEditorDialog"/>
             </Menu>
             <Menu text="Confronta Immagini">
                 <MenuItem text="Confronta" onAction="#handleShowCompareDialog"/>
