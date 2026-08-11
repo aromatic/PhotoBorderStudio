@@ -2,11 +2,13 @@ package it.romagnoli.photoborder;
 
 import it.romagnoli.photoborder.dialog.AlphaEditorDialog;
 import it.romagnoli.photoborder.dialog.BorderDialog;
+import it.romagnoli.photoborder.dialog.ColorAdjustDialog;
 import it.romagnoli.photoborder.dialog.ColorAnalysisDialog;
 import it.romagnoli.photoborder.dialog.CopyrightDialog;
 import it.romagnoli.photoborder.dialog.HistogramDialog;
 import it.romagnoli.photoborder.dialog.HueSaturationDialog;
 import it.romagnoli.photoborder.dialog.ImageCompareDialog;
+import it.romagnoli.photoborder.dialog.ZoneSystemDialog;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.fxml.FXML;
 import javafx.geometry.Point2D;
@@ -53,7 +55,9 @@ public class AppController implements CanvasBorderedImage {
     private final HueSaturationDialog hueSaturationDialog = new HueSaturationDialog();
     private final ColorAnalysisDialog colorAnalysisDialog = new ColorAnalysisDialog();
     private final AlphaEditorDialog alphaEditorDialog = new AlphaEditorDialog();
+    private final ColorAdjustDialog colorAdjustDialog = new ColorAdjustDialog();
     private final ImageCompareDialog imageCompareDialog = new ImageCompareDialog();
+    private final ZoneSystemDialog zoneSystemDialog = new ZoneSystemDialog();
 
     private Image originalImage;
     private WritableImage borderedImage; // immagine con i bordi, usata anche per il salvataggio
@@ -119,7 +123,7 @@ public class AppController implements CanvasBorderedImage {
 
     @FXML
     private void handleOpenImage() {
-        File file = Utility.openFileChooser();
+        file = Utility.openFileChooser();
 
         if (file != null) {
             originalImage = Utility.loadImage(file);
@@ -173,13 +177,30 @@ public class AppController implements CanvasBorderedImage {
     }
 
     @FXML
-    private void handleShowCompareDialog() {
-        imageCompareDialog.show();
+    private void handleShowAlphaEditorDialog() {
+        System.out.println("******************************* handleShowAlphaEditorDialog");
+        alphaEditorDialog.setImageView(imageView);
+        System.out.println("******************************* handleShowAlphaEditorDialog file=" + file);
+        alphaEditorDialog.setFile(file);
+        System.out.println("******************************* handleShowAlphaEditorDialog show");
+        alphaEditorDialog.show();   
     }
 
     @FXML
-    private void handleShowAlphaEditorDialog() {
-        alphaEditorDialog.show();
+    private void handleShowColorAdjustDialog() {
+        colorAdjustDialog.setImageView(imageView);
+        colorAdjustDialog.show();
+    }   
+
+    @FXML
+    private void handleShowCompareDialog() {
+        imageCompareDialog.show();
+    }
+    
+    @FXML
+    private void handleShowZoneSystemDialog() {
+        zoneSystemDialog.setImageView(imageView);
+        zoneSystemDialog.show();
     }
 
     /** Ricalcola i colori campionati dall'immagine e ridisegna i marker in overlay. */

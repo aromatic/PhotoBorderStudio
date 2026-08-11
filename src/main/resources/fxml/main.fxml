@@ -22,6 +22,8 @@
                 <MenuItem text="Hue / Saturation" onAction="#handleShowHueSaturationDialog"/>
                 <MenuItem text="Analizza colori" onAction="#handleShowColorAnalysisDialog"/>
                 <MenuItem text="Regolazione Alpha" onAction="#handleShowAlphaEditorDialog"/>
+                <MenuItem text="Regolazione Colore" onAction="#handleShowColorAdjustDialog"/>
+                <MenuItem text="Zone System" onAction="#handleShowZoneSystemDialog"/>
             </Menu>
             <Menu text="Confronta Immagini">
                 <MenuItem text="Confronta" onAction="#handleShowCompareDialog"/>

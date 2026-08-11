@@ -23,6 +23,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
@@ -72,6 +73,8 @@ public class AlphaEditorDialog {
     Slider slider2;
     Mat src = null;
     private CanvasBorderedImage canvasBorderedImage;
+    WritableImage writableImage = null;
+    private File file;
 
     public AlphaEditorDialog() {
 
@@ -98,84 +101,65 @@ public class AlphaEditorDialog {
                 dialog = null;
             });
 
-        // Path immagine (corretto l'escape del carattere '\')
-        String file = "/home/andrea/Immagini/Cattura.jpg";
-        src = Imgcodecs.imread(file);
+            Label label1 = new Label("Alpha value (Contrasto)");
 
-        WritableImage writableImage = null;
-        try {
-            writableImage = loadImage(src);
-        } catch (IOException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
+            // Setting del primo slider (Alpha)
+            slider1 = new Slider(0.1, 3, 1);
+            slider1.setShowTickLabels(true);
+            slider1.setShowTickMarks(true);
+            slider1.setMajorTickUnit(1);
+            slider1.setBlockIncrement(0.05);
 
-        // Setting dell'ImageView
-        imageView = new ImageView(writableImage);
-        imageView.setX(50);
-        imageView.setY(25);
-        imageView.setFitHeight(400);
-        imageView.setFitWidth(550);
-        imageView.setPreserveRatio(true);
+            Label label2 = new Label("α-value: 1.0");
+            Label label3 = new Label("Beta value (Luminosità)");
 
-        Label label1 = new Label("Alpha value (Contrasto)");
+            // Setting del secondo slider (Beta)
+            slider2 = new Slider(-100, 100, 0);
+            slider2.setShowTickLabels(true);
+            slider2.setShowTickMarks(true);
+            slider2.setMajorTickUnit(25);
+            slider2.setBlockIncrement(10);
 
-        // Setting del primo slider (Alpha)
-        slider1 = new Slider(0.1, 3, 1);
-        slider1.setShowTickLabels(true);
-        slider1.setShowTickMarks(true);
-        slider1.setMajorTickUnit(1);
-        slider1.setBlockIncrement(0.05);
+            Label label4 = new Label("β-value: 0.0");
 
-        Label label2 = new Label("α-value: 1.0");
-        Label label3 = new Label("Beta value (Luminosità)");
-
-        // Setting del secondo slider (Beta)
-        slider2 = new Slider(-100, 100, 0);
-        slider2.setShowTickLabels(true);
-        slider2.setShowTickMarks(true);
-        slider2.setMajorTickUnit(25);
-        slider2.setBlockIncrement(10);
-
-        Label label4 = new Label("β-value: 0.0");
-
-        // Listener per slider1 (Alpha)
-        slider1.valueProperty().addListener(new ChangeListener<Number>() {
-            @Override
-            public void changed(ObservableValue<? extends Number> observable, Number oldValue, Number newValue) {
-                try {
-                    label2.setText(String.format("α-value: %.2f", newValue.doubleValue()));
-                    alpha = newValue.doubleValue();
-                    Mat dest = new Mat(src.rows(), src.cols(), src.type());
-                    src.convertTo(dest, rtype, alpha, beta);
-                    imageView.setImage(loadImage(dest));
-                } catch (Exception e) {
-                    e.printStackTrace();
+            System.out.println("******************************* src: " + src);
+            // Listener per slider1 (Alpha)
+            slider1.valueProperty().addListener(new ChangeListener<Number>() {
+                @Override
+                public void changed(ObservableValue<? extends Number> observable, Number oldValue, Number newValue) {
+                    try {
+                        label2.setText(String.format("α-value: %.2f", newValue.doubleValue()));
+                        alpha = newValue.doubleValue();
+                        Mat dest = new Mat(src.rows(), src.cols(), src.type());
+                        src.convertTo(dest, rtype, alpha, beta);
+                        imageView.setImage(loadImage(dest));
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
                 }
-            }
-        });
+            });
 
-        // Listener per slider2 (Beta)
-        slider2.valueProperty().addListener(new ChangeListener<Number>() {
-            @Override
-            public void changed(ObservableValue<? extends Number> observable, Number oldValue, Number newValue) {
-                try {
-                    label4.setText(String.format("β-value: %.2f", newValue.doubleValue()));
-                    beta = newValue.doubleValue();
-                    Mat dest = new Mat(src.rows(), src.cols(), src.type());
-                    src.convertTo(dest, rtype, alpha, beta);
-                    imageView.setImage(loadImage(dest));
-                } catch (Exception e) {
-                    e.printStackTrace();
+            // Listener per slider2 (Beta)
+            slider2.valueProperty().addListener(new ChangeListener<Number>() {
+                @Override
+                public void changed(ObservableValue<? extends Number> observable, Number oldValue, Number newValue) {
+                    try {
+                        label4.setText(String.format("β-value: %.2f", newValue.doubleValue()));
+                        beta = newValue.doubleValue();
+                        Mat dest = new Mat(src.rows(), src.cols(), src.type());
+                        src.convertTo(dest, rtype, alpha, beta);
+                        imageView.setImage(loadImage(dest));
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
                 }
-            }
-        });
+            });
 
-        // VBox per organizzare i componenti
-        VBox vbox = new VBox();
-        vbox.setPadding(new Insets(20));
-        vbox.setSpacing(10);
-        vbox.getChildren().addAll(label1, slider1, label2, imageView, label3, slider2, label4);
+            // VBox per organizzare i componenti
+            VBox vbox = new VBox();
+            vbox.setPadding(new Insets(20));
+            vbox.setSpacing(10);
+            vbox.getChildren().addAll(label1, slider1, label2, label3, slider2, label4);
 
            /* Button savePointsButton = new Button("Salva punti");
 
@@ -258,11 +242,23 @@ public class AlphaEditorDialog {
 
 
     public void reset() {
-
         imageView.setImage(null);
-
-
     }
 
+    public void setImageView(ImageView imageView) {
+        this.imageView = imageView;
+        Image sourceImage = imageView.getImage();
+        if (sourceImage != null) {
+            // Converti l'immagine in Mat
+            BufferedImage bufImage  = SwingFXUtils.fromFXImage(sourceImage, null);
+            writableImage = SwingFXUtils.toFXImage(bufImage, null);
+            System.out.println("******************************* Image Loaded from ImageView");  
+        }
+    }
 
+    public void setFile(File file) {
+        this.file = file;
+        src = Imgcodecs.imread(file.getAbsolutePath());
+        System.out.println("******************************* Image Loaded from file: " + file.getAbsolutePath());    
+    }
 }
